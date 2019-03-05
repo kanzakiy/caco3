@@ -84,7 +84,7 @@ integer(kind=4) :: file_tmp=100,file_ccflx=101,file_omflx=102,file_o2flx=103,fil
 external dgesv
 logical :: nonlocal = .false. ! use transition matrix from LABS for non-local mixing
 logical :: oxic = .true.  ! oxic only model of OM degradation by Emerson (1985) 
-logical :: anoxic = .true.  ! oxic-anoxic model of OM degradation by Archer (1991) 
+logical :: anoxic = .false.  ! oxic-anoxic model of OM degradation by Archer (1991) 
 real(kind=8) :: calceqcc, calceqag
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)
@@ -1741,10 +1741,12 @@ print*,''
 #endif
 
 !! in theory, o2dec/ox2om + alkdec = dicdec = omdec (in absolute value)
-if ( abs((o2dec/ox2om - alkdec + dicdec)/dicdec) > tol) then 
-    print*, abs((o2dec/ox2om + alkdec - dicdec)/dicdec) 
-    stop
-endif
+if (dicdec /= 0d0) then 
+    if ( abs((o2dec/ox2om - alkdec + dicdec)/dicdec) > tol) then 
+        print*, abs((o2dec/ox2om + alkdec - dicdec)/dicdec) 
+        stop
+    endif
+endif 
 
 ! pause
 
