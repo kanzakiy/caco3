@@ -84,6 +84,7 @@ integer(kind=4) :: file_tmp=100,file_ccflx=101,file_omflx=102,file_o2flx=103,fil
 external dgesv
 logical :: nonlocal = .false. ! use transition matrix from LABS for non-local mixing
 logical :: oxic = .true.  ! oxic only model of OM degradation by Emerson (1985) 
+logical :: anoxic = .true.  ! oxic-anoxic model of OM degradation by Archer (1991) 
 real(kind=8) :: calceqcc, calceqag
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)
@@ -135,12 +136,17 @@ nonlocal = .false.   ! local mixing
 ! nonlocal = .true.  ! non-local mixing from LABS
 
 !!!!!!!!!!!!!!
-
+#ifndef nonrec
 !! FILES !!!!!!!!!
 workdir = 'C:/Users/YK/Desktop/Sed_res/'
-workdir = trim(adjustl(workdir))//'test-translabs/'
+workdir = trim(adjustl(workdir))//'test-translabs/profiles/'
 workdir = trim(adjustl(workdir))//'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
     //'_dep-'//trim(adjustl(chr(3,4)))
+if (.not. anoxic) then 
+    workdir = trim(adjustl(workdir))//'_ox'
+else 
+    workdir = trim(adjustl(workdir))//'_oxanox'
+endif
 ! workdir = trim(adjustl(workdir))//'-'//trim(adjustl(dumchr(1)))  ! adding date
 call system ('mkdir -p '//trim(adjustl(workdir)))
 workdir = trim(adjustl(workdir))//'/'
@@ -151,7 +157,7 @@ open(unit=file_omflx,file=trim(adjustl(workdir))//'omflx.txt',action='write',sta
 open(unit=file_o2flx,file=trim(adjustl(workdir))//'o2flx.txt',action='write',status='unknown')
 open(unit=file_dicflx,file=trim(adjustl(workdir))//'dicflx.txt',action='write',status='unknown')
 open(unit=file_alkflx,file=trim(adjustl(workdir))//'alkflx.txt',action='write',status='unknown')
-
+#endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!  MAKING GRID !!!!!!!!!!!!!!!!!
@@ -219,6 +225,7 @@ wi = (detflx/msed*mvsed + ccflx*mvcc            )/(1d0-poroi)
 zox = 10d0 ! priori assumed oxic zone 
 
 !!! ~~~~~~~~~~~~~~ set recording time 
+#ifndef nonrec
 open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
 time_max = ztot / wi ! yr
 do itrec=1,nrec 
@@ -228,6 +235,7 @@ enddo
 close(file_tmp)
 ! pause
 cntrec = 1
+#endif
 !!!~~~~~~~~~~~~~~~~~
 
 !!!! TRANSITION MATRIX !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -354,6 +362,7 @@ oxco2 = 0d0
 anco2 = 0d0
 
 ! ~~~ saving initial conditions 
+#ifndef nonrec
 write(dumchr(1),'(i3.3)') 0
 
 open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace') 
@@ -379,8 +388,8 @@ do iz = 1,nz
     write(file_tmp,*) z(iz),om(iz)*mom/2.5d0*100d0
 enddo
 close(file_tmp)
+#endif
 !~~~~~~~~~~~~~~~~~~~~~~~~
-
 !! START OF TIME INTEGLATION !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 time = 0d0
@@ -413,6 +422,7 @@ if (oxic) then
             izox = iz
         else
             kom(iz) = 0d0
+            if (anoxic) kom(iz) = komi
             dbio(iz) =  0d0
         endif
     enddo
@@ -1167,6 +1177,7 @@ enddo
 
 ymx = - ymx
 
+#ifndef nonrec
 if (any(isnan(ymx))) then 
     print*,'NAN in ymx'
     open(unit=file_tmp,file=trim(adjustl(workdir))//'chk_ymx_pre.txt',status = 'unknown')
@@ -1198,7 +1209,7 @@ if (any(isnan(ymx))) then
     close(file_tmp)
     ! stop
 endif
-
+#endif
 ! stop
 
 do iz = 1, nz 
@@ -1512,6 +1523,7 @@ enddo
 
 ymx = - ymx
 
+#ifndef nonrec
 if (any(isnan(ymx))) then 
     print*,'NAN in ymx:pt'
     open(unit=file_tmp,file=trim(adjustl(workdir))//'chk_ymx_pre_pt.txt',status = 'unknown')
@@ -1543,6 +1555,7 @@ if (any(isnan(ymx))) then
     close(file_tmp)
     stop
 endif
+#endif
 
 ptx = ymx
 
@@ -1660,6 +1673,7 @@ if (any(rho<0d0)) then
     stop
 endif 
 
+#ifndef nonrec
 if (time>=rectime(cntrec)) then 
     write(dumchr(1),'(i3.3)') cntrec 
     
@@ -1695,6 +1709,7 @@ if (time>=rectime(cntrec)) then
     cntrec = cntrec + 1
     if (cntrec == nrec+1) exit
 endif 
+#endif
 
 #ifndef nondisp    
 print*, 'time   :',time, maxval(abs(frt - 1d0))
@@ -1725,6 +1740,12 @@ print'(A,5E11.3)', 'frc:',(frt(iz),iz=1,nz,nz/5)
 print*,''
 #endif
 
+!! in theory, o2dec/ox2om + alkdec = dicdec = omdec (in absolute value)
+if ( abs((o2dec/ox2om - alkdec + dicdec)/dicdec) > tol) then 
+    print*, abs((o2dec/ox2om + alkdec - dicdec)/dicdec) 
+    stop
+endif
+
 ! pause
 
 time = time + dt
@@ -1740,15 +1761,26 @@ pt = ptx
 
 enddo
 
+#ifndef nonrec
 close(file_ptflx)
 close(file_ccflx)
 close(file_omflx)
 close(file_o2flx)
 close(file_dicflx)
 close(file_alkflx)
+#endif
 
 workdir = 'C:/Users/YK/Desktop/Sed_res/'
-workdir = trim(adjustl(workdir))//'test-translabs/'
+workdir = trim(adjustl(workdir))//'test-translabs/res/'
+
+call system ('mkdir -p '//trim(adjustl(workdir)))
+
+
+if (.not. anoxic) then 
+    workdir = trim(adjustl(workdir))//'ox-'
+else 
+    workdir = trim(adjustl(workdir))//'oxanox-'
+endif
 
 open(unit=file_tmp,file=trim(adjustl(workdir))//'lys_sense_'// &
     'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
