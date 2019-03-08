@@ -57,7 +57,7 @@ real(kind=8) kcc(nz)
 real(kind=8) kom(nz), oxco2(nz),anco2(nz) 
 real(kind=8) w(nz) , wi, dw(nz)
 real(kind=8) z(nz), dz(nz), eta(nz), beta 
-real(kind=8) :: ztot = 50d0 ! cm 
+real(kind=8) :: ztot = 500d0 ! cm 
 integer(kind=4) :: nsp = 3  ! independent chemical variables 
 integer(kind=4) :: nmx 
 real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:)
@@ -91,7 +91,7 @@ integer(kind=4) :: file_err=107
 external dgesv
 logical :: nonlocal = .false. ! use transition matrix from LABS for non-local mixing
 logical :: oxic = .true.  ! oxic only model of OM degradation by Emerson (1985) 
-logical :: anoxic = .true.  ! oxic-anoxic model of OM degradation by Archer (1991) 
+logical :: anoxic = .false.  ! oxic-anoxic model of OM degradation by Archer (1991) 
 real(kind=8) :: calceqcc, calceqag
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)
@@ -1334,9 +1334,11 @@ if (any(isnan(ymx))) then
     close(file_tmp)
     ! stop
 endif
+#endif 
 
 call dgesv(nmx,int(1),amx,nmx,ipiv,ymx,nmx,info) 
 
+#ifdef nonrec
 if (any(isnan(amx))) then
     print*,'NAN in amx'
     open(unit=file_tmp,file=trim(adjustl(workdir))//'chk_amx.txt',status = 'unknown')
