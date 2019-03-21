@@ -12,11 +12,20 @@ program caco3
 implicit none
 
 integer(kind=4),parameter :: nz = 100
+#ifdef sense
+integer(kind=4),parameter :: nspcc = 1
+#elif defined track2
+integer(kind=4),parameter :: nspcc = 22
+#elif defined size
+integer(kind=4),parameter :: nspcc = 8
+#else
 integer(kind=4),parameter :: nspcc = 4
+#endif
 real(kind=8) cc(nz,nspcc),ccx(nz,nspcc)  ! mol cm-3 sld
 real(kind=8) om(nz),omx(nz)  ! mol cm-3 sld
 real(kind=8) pt(nz), ptx(nz) ! # of specific particles/# of total particles ??
-real(kind=8) ccflx(nspcc), d13c_sp(nspcc),d18o_sp(nspcc), d13c_blk(nz), d18o_blk(nz) 
+real(kind=8) ccflx(nspcc), d13c_sp(nspcc),d18o_sp(nspcc), d13c_blk(nz), d18o_blk(nz)
+real(kind=8) d13c_blkf(nz), d18o_blkf(nz),  d13c_blkc(nz), d18o_blkc(nz)
 real(kind=8) d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf,d13c_ocn, d18o_ocn, flxfrc(nspcc),flxfrc2(nspcc)
 real(kind=8) d13c_flx, d18o_flx
 real(kind=8) :: ccflxi = 10d-6 ! mol (CaCO3) cm-2 yr-1  ! Emerson and Archer (1990) 
@@ -30,8 +39,8 @@ real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary
 ! real(kind=8) :: komi = 0.1d0  ! /yr  ! Canfield 1994
 ! real(kind=8) :: komi = 0.06d0  ! /yr  ! ?? Emerson 1985? who adopted relatively slow decomposition rate 
 ! real(kind=8) :: kcci = 10.0d0*365.25d0  ! /yr  0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
-! real(kind=8) :: kcci = 1d0*365.25d0  ! /yr  0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
-real(kind=8) :: kcci = 0d0*365.25d0  ! /yr  0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
+real(kind=8) :: kcci = 1d0*365.25d0  ! /yr  0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
+! real(kind=8) :: kcci = 0d0*365.25d0  ! /yr  0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
 real(kind=8) :: poroi = 0.8d0  
 real(kind=8) :: keqcc = 4.4d-7   ! mol2 kg-2 (Mucci 1983 cited by Emerson and Archer 1990)
 real(kind=8) :: ncc = 4.5d0   ! (Archer et al. 1989)
@@ -53,10 +62,10 @@ real(kind=8) :: om2cc = 0.666d0  ! rain ratio of organic matter to calcite
 real(kind=8) :: o2th = 0d0 ! threshold oxygen level below which not to calculate 
 real(kind=8) :: dev = 1d-6 ! deviation addumed 
 real(kind=8) :: zml_ref = 12d0 ! mixed layer depth
-real(kind=8) dif_alk0, dif_dic0, dif_o20, zml(nspcc+2) , zrec, zrec2
+real(kind=8) dif_alk0, dif_dic0, dif_o20, zml(nspcc+2) , zrec, zrec2, chgf, flxfin, flxfini, flxfinf
 real(kind=8) pore_max, exp_pore, calgg  ! parameters to determine porosity in Archer
 real(kind=8) mvom, mvsed, mvcc  ! molar volumes (cm3 mol-1) mv_i = m_i/rho_i
-real(kind=8) keq1, keq2, calceq1,calceq2, co3sat, keqag, dep, zox, zoxx
+real(kind=8) keq1, keq2, calceq1,calceq2, co3sat, keqag, dep, zox, zoxx, depi,depf, corrf, df, err_f, err_fx
 real(kind=8) dic(nz), dicx(nz), alk(nz), alkx(nz), o2(nz), o2x(nz) !  mol cm-3 porewater 
 real(kind=8) dbio(nz),dif_dic(nz), dif_alk(nz), dif_o2(nz), ff(nz)
 real(kind=8) co2(nz), hco3(nz), co3(nz), pro(nz)
@@ -66,7 +75,7 @@ real(kind=8) rcc(nz,nspcc), drcc_dcc(nz,nspcc), drcc_ddic(nz,nspcc), drcc_dalk(n
 real(kind=8) dco3_ddic(nz), dco3_dalk(nz), ddum(nz), dpro_dalk(nz), dpro_ddic(nz)
 real(kind=8) kcc(nz,nspcc) 
 real(kind=8) kom(nz), oxco2(nz),anco2(nz) 
-real(kind=8) w(nz) , wi, dw(nz), wx(nz), err_w, wxx(nz)
+real(kind=8) w(nz) , wi, dw(nz), wx(nz), err_w, wxx(nz),err_f_min, dfrt_df, d2frt_df2, dfrt_dfx, err_w_min
 real(kind=8) z(nz), dz(nz), eta(nz), beta, dage(nz), age(nz) 
 real(kind=8) :: ztot = 500d0 ! cm 
 integer(kind=4) :: nsp = 3  ! independent chemical variables 
@@ -76,7 +85,7 @@ integer(kind=4),allocatable :: ipiv(:),dumx(:,:)
 integer(kind=4) infobls, infosbr
 real(kind=8) error, error2, minerr
 real(kind=8) :: tol = 1d-6
-integer(kind=4) iz, row, col, itr  , it, iiz, itr_w, cntsp, izrec, izrec2
+integer(kind=4) iz, row, col, itr  , it, iiz, itr_w, cntsp, izrec, izrec2, itr_f
 integer(kind=4) :: nt = 1000000
 integer(kind=4),parameter :: nrec = 15
 integer(kind=4) :: cntrec, itrec, izox_minerr =0
@@ -93,7 +102,7 @@ real(kind=8) :: dictflx, dicdis, dicdif, dicdec, dicres
 real(kind=8) :: alktflx, alkdis, alkdif, alkdec, alkres 
 real(kind=8) :: pttflx, ptdif, ptadv, ptres, ptrain 
 real(kind=8) :: trans(nz,nz,nspcc+2), transdbio(nz,nz), translabs(nz,nz),transturbo2(nz,nz), translabs_tmp(nz,nz)
-character*256 workdir, filechr
+character*512 workdir, filechr
 character*10 dumchr(3)
 character*25 arg, chr(3,4)
 integer(kind=4) dumint(8), idp, izox, narg, ia, izml, isp, ilabs, nlabs
@@ -105,9 +114,10 @@ logical :: oxic = .true.  ! oxic only model of OM degradation by Emerson (1985)
 logical :: anoxic = .true.  ! oxic-anoxic model of OM degradation by Archer (1991) 
 logical :: nobio(nspcc+2) = .false.  ! no biogenic reworking assumed 
 logical :: turbo2(nspcc+2) = .false.  ! random mixing 
-logical :: labs(nspcc+2) = .true.  ! mixing info from LABS 
+logical :: labs(nspcc+2) = .false.  ! mixing info from LABS 
 logical :: nonlocal(nspcc+2)  ! ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
 real(kind=8) :: calceqcc, calceqag
+real(kind=8), parameter :: pi=4.0d0*atan(1.0d0) 
 ! when using sparse matrix solver 
 integer(kind=4) n, nnz
 integer(kind=4), allocatable :: ai(:), ap(:) 
@@ -186,7 +196,11 @@ if (any(turbo2)) workdir = trim(adjustl(workdir))//'_turbo2'
 if (any(nobio)) workdir = trim(adjustl(workdir))//'_nobio'
 workdir = trim(adjustl(workdir))//'/'
 workdir = trim(adjustl(workdir))//'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
+#ifdef sense
+    //'_dep-'//trim(adjustl(chr(3,4)))
+#else
     //'_'//trim(adjustl(filechr))
+#endif
 ! workdir = trim(adjustl(workdir))//'-'//trim(adjustl(dumchr(1)))  ! adding date
 call system ('mkdir -p '//trim(adjustl(workdir)))
 workdir = trim(adjustl(workdir))//'/'
@@ -287,6 +301,8 @@ wi = (detflx/msed*mvsed + sum(ccflx)*mvcc            )/(1d0-poroi)
 ! print*,wi
 ! pause
 
+500 continue
+
 w= wi
 
 !! depth -age 
@@ -364,9 +380,13 @@ zox = 10d0 ! priori assumed oxic zone
 !!!!
 !!! +++ tracing experiment 
 time_spn = ztot / wi *50d0 ! yr
-time_trs = 5d3 !  5 kyr transition
+time_trs = 50d3 !  5 kyr transition
 ! time_aft = time_spn 
-time_aft = time_trs*50d0 
+time_aft = time_trs*3d0 
+#ifdef sense
+time_trs = 0d0
+time_aft = 0d0 
+#endif 
 do itrec=1,nrec/3
     rectime(itrec)=itrec*time_spn/real(nrec/3)
 enddo
@@ -386,6 +406,12 @@ enddo
 close(file_tmp)
 #endif
 
+depi = 4d0
+depf = 5d0
+
+flxfini = 0.5d0
+flxfinf = 0.9d0
+
 ! ///////////// isotopes  ////////////////
 d13c_ocni = 2d0
 d13c_ocnf = -1d0
@@ -396,6 +422,7 @@ d18o_ocnf = -1d0
     ! d13c_sp(isp) = d13c_ocni + (d13c_ocnf - d13c_ocni)*(isp-1)/real(nspcc-1)
     ! d18o_sp(isp) = d18o_ocni + (d18o_ocnf - d18o_ocni)*(isp-1)/real(nspcc-1)
 ! enddo
+#ifndef sense
 d13c_sp(1)=d13c_ocni
 d18o_sp(1)=d18o_ocni
 d13c_sp(2)=d13c_ocni
@@ -404,10 +431,21 @@ d13c_sp(3)=d13c_ocnf
 d18o_sp(3)=d18o_ocni
 d13c_sp(4)=d13c_ocnf
 d18o_sp(4)=d18o_ocnf
+#else
+d18o_sp=0d0
+d13c_sp=0d0
+#endif 
 
-! d18o_sp=0d0
-! d13c_sp=0d0
-
+#ifdef size 
+d13c_sp(5)=d13c_ocni
+d18o_sp(5)=d18o_ocni
+d13c_sp(6)=d13c_ocni
+d18o_sp(6)=d18o_ocnf
+d13c_sp(7)=d13c_ocnf
+d18o_sp(7)=d18o_ocni
+d13c_sp(8)=d13c_ocnf
+d18o_sp(8)=d18o_ocnf
+#endif 
 !! //////////////////////////////////
 !!!~~~~~~~~~~~~~~~~~
 
@@ -415,11 +453,11 @@ d18o_sp(4)=d18o_ocnf
 !~~~~~~~~~~~~ loading transition matrix from LABS ~~~~~~~~~~~~~~~~~~~~~~~~
 if (any(labs)) then
     translabs = 0d0
-    nlabs = 1460
+    nlabs = 7394
     do ilabs=1,nlabs
         translabs_tmp=0d0
-        write(dumchr(1),'(i0)') ilabs*5000
-        open(unit=file_tmp, file='C:/Users/YK/Desktop/biot-res/trans-test-20190311/mix/' &
+        write(dumchr(1),'(i0)') ilabs*2000
+        open(unit=file_tmp, file='C:/Users/YK/Desktop/biot-res/trans-test-1kyr-frq-20190315/mix/' &
             //'transmtx-'//trim(adjustl(dumchr(1)))//'.txt',action='read',status='unknown')
         ! open(unit=file_tmp, file='C:/Users/YK/Desktop/biot-res/'// &
             ! 'trans-test-100yr-20190108' &
@@ -437,7 +475,8 @@ endif
 
 if (.true.) then 
 ! if (.false.) then 
-    translabs = translabs *365.25d0/10d0*0.01d0/20d0
+    ! translabs = translabs *365.25d0/10d0*1d0/2.3d0
+    translabs = translabs *365.25d0/10d0*1d0/10d0
 endif
 
 if (.false.) then 
@@ -465,11 +504,18 @@ endif
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 zml=zml_ref
 
-! zml(2+2)=2d0 
-! zml(2+3)=2d0 
-
 zrec = 1.1d0*maxval(zml)
 zrec2 = 2.0d0*maxval(zml)
+
+#ifdef size 
+zml(2+1)=20d0 
+zml(2+2)=20d0 
+zml(2+3)=20d0 
+zml(2+4)=20d0 
+zrec = 1.1d0*minval(zml)
+zrec2 = 1.1d0*maxval(zml)
+#endif 
+
 do iz=1,nz
     if (z(iz)<=zrec) izrec = iz
     if (z(iz)<=zrec2) izrec2 = iz
@@ -533,8 +579,8 @@ endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !~~~~~~~~diffusion & reaction~~~~~~~~~~~~~~~~~~~~~~
-ff = poro*poro*poro  ! Archer 
-! ff = poro*poro       ! Huelse et al., 2018
+! ff = poro*poro*poro  ! Archer 
+ff = poro*poro       ! Huelse et al., 2018
 
 dif_dic0 = (151.69d0 + 7.93d0*temp) ! cm2/yr at 2 oC (Huelse et al. 2018)
 dif_alk0 = (151.69d0 + 7.93d0*temp) ! cm2/yr  (Huelse et al. 2018)
@@ -547,8 +593,12 @@ dif_o2 = dif_o20*ff
 kom = komi 
 kcc = kcci
 
-! kcc(:,2) = kcci*10d0
-! kcc(:,3) = kcci*10d0
+#ifdef size 
+kcc(:,1) = kcci*10d0
+kcc(:,2) = kcci*10d0
+kcc(:,3) = kcci*10d0
+kcc(:,4) = kcci*10d0
+#endif 
 
 keq1 = calceq1(temp,sal,dep)
 keq2 = calceq2(temp,sal,dep)
@@ -653,11 +703,12 @@ do
 ! dt = dtom  ! yr
 
 !! ///////// isotopes & fluxes settings ////////////// 
+#ifndef sense    
 if (time <= time_spn) then 
     if (time+dt> time_spn) then
-        dt=time_trs/100d0 
+        dt=time_trs/5000d0 
     else
-        dt = time_spn/ 5000d0
+        dt = time_spn/ 800d0
     endif
     ! dt=time_trs/100d0 
     ! dt = 100d0
@@ -665,25 +716,49 @@ if (time <= time_spn) then
     d18o_ocn = d18o_ocni
     ccflx = 0d0
     ccflx(1) = ccflxi
-    dep = 4.0d0
-    
-    ! cntsp=1
-    ! d18o_sp(cntsp)=d18o_ocn
-    ! d13c_sp(cntsp)=d13c_ocn
-    ! ccflx = 0d0
-    ! ccflx(cntsp) = ccflxi
-    
+    dep = depi
+#ifdef track2
+    cntsp=1
+    d18o_sp(cntsp)=d18o_ocn
+    d13c_sp(cntsp)=d13c_ocn
+    ccflx = 0d0
+    ccflx(cntsp) = ccflxi
+#endif 
+#ifdef size 
+    ccflx = 0d0
+    flxfin = flxfini
+    ccflx(1) = flxfin*ccflxi
+    ccflx(5) = (1d0-flxfin)*ccflxi
+#endif 
 elseif (time>time_spn .and. time<=time_spn+time_trs) then 
-    dt = time_trs/100d0
+    dt = time_trs/5000d0
     d13c_ocn = d13c_ocni + (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs
     d18o_ocn = d18o_ocni + (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs 
     if (time-time_spn<=time_trs/2d0) then
         ! d13c_ocn = d13c_ocni + (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*2d0
         d18o_ocn = d18o_ocni + (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
+        flxfin = flxfini + (time-time_spn)*(flxfinf-flxfini)/time_trs*2d0
     else 
         ! d13c_ocn = 2d0*d13c_ocnf - d13c_ocni  - (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*2d0
         d18o_ocn = 2d0*d18o_ocnf - d18o_ocni - (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
+        flxfin = 2d0*flxfinf - flxfini - (time-time_spn)*(flxfinf-flxfini)/time_trs*2d0
     endif
+    
+    if (time-time_spn<=time_trs/10d0) then
+        d13c_ocn = d13c_ocni + (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*10d0
+        ! d18o_ocn = d18o_ocni + (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
+        dep = depi + (depf-depi)*(time-time_spn)/time_trs*10d0
+    elseif (time-time_spn>time_trs/10d0 .and. time-time_spn<=time_trs/10d0*9d0) then
+        d13c_ocn = d13c_ocnf
+        dep = depf
+    elseif  (time-time_spn>time_trs/10d0*9d0) then 
+        d13c_ocn = 10d0*d13c_ocnf - 9d0*d13c_ocni  - (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*10d0
+        ! d18o_ocn = 2d0*d18o_ocnf - d18o_ocni - (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
+        dep = 10d0*depf-9d0*depi - (depf-depi)*(time-time_spn)/time_trs*10d0
+    endif
+    
+    ! d18o_ocn = (d18o_ocni+d18o_ocnf)*0.5d0 + (d18o_ocni-d18o_ocnf)*0.5*cos((time-time_spn)*2d0*pi/(time_trs/4d0)) 
+    
     ! print*,d13c_ocn
     if (.not.(d13c_ocn>=d13c_ocnf .and.d13c_ocn<=d13c_ocni)) then 
         print*,'error in d13c',d13c_ocn
@@ -695,7 +770,6 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
     ! ccflx = 0d0
     ! ccflx(isp) = ccflxi*abs((d13c_sp(isp+1)-d13c_ocn))/(abs(d13c_sp(isp)-d13c_ocn)+abs(d13c_sp(isp+1)-d13c_ocn))
     ! ccflx(isp+1) = ccflxi*abs((d13c_sp(isp)-d13c_ocn))/(abs(d13c_sp(isp)-d13c_ocn)+abs(d13c_sp(isp+1)-d13c_ocn))
-    
     flxfrc(1) = abs(d13c_ocnf-d13c_ocn)/(abs(d13c_ocnf-d13c_ocn)+abs(d13c_ocni-d13c_ocn))
     flxfrc(2) = abs(d13c_ocni-d13c_ocn)/(abs(d13c_ocnf-d13c_ocn)+abs(d13c_ocni-d13c_ocn))
     flxfrc(3) = abs(d18o_ocnf-d18o_ocn)/(abs(d18o_ocnf-d18o_ocn)+abs(d18o_ocni-d18o_ocn))
@@ -728,15 +802,28 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
         print*,'error'
         stop
     enddo 
+#ifdef track2    
+    if (mod(it,int(5000/(nspcc-2)))==0) then  
+        cntsp=cntsp+1
+        d18o_sp(cntsp)=d18o_ocn
+        d13c_sp(cntsp)=d13c_ocn
+        ccflx = 0d0
+        ccflx(cntsp) = ccflxi
+    endif 
+#else 
     do isp=1,nspcc
         ccflx(isp)=flxfrc2(isp)*ccflxi
     enddo
+#endif 
     
-    ! cntsp=cntsp+1
-    ! d18o_sp(cntsp)=d18o_ocn
-    ! d13c_sp(cntsp)=d13c_ocn
-    ! ccflx = 0d0
-    ! ccflx(cntsp) = ccflxi
+#ifdef size
+    do isp=1,4
+        ccflx(isp)=flxfrc2(isp)*ccflxi*flxfin
+    enddo
+    do isp=5,8
+        ccflx(isp)=flxfrc2(isp-4)*ccflxi*(1d0-flxfin)
+    enddo
+#endif 
     
     ! dep = 4.0d0 + (6d0-4d0)*(time-time_spn)/time_trs
     ! if (time-time_spn<=time_trs/2d0) then
@@ -744,36 +831,51 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
     ! else 
         ! dep = 2*6d0 - 4.0d0 - (6d0-4d0)*(time-time_spn)/time_trs*2d0
     ! endif
-    dep = 4.0d0
+    ! dep = 4.0d0
     ! dep = 6.0d0
 elseif (time>time_spn+time_trs) then 
     dt = time_aft/1000d0
-    ! dt=time_trs/100d0 
-    d13c_ocn = d13c_ocnf 
+    dt=time_trs/1000d0 
+    d13c_ocn = d13c_ocni 
     d18o_ocn = d18o_ocni
     ccflx = 0d0
-    ccflx(3) = ccflxi
+    ! ccflx(3) = ccflxi
+    ccflx(1) = ccflxi
     ! dep = 6.0d0
-    
-    ! if (cntsp+1/=nspcc) then
-        ! print*,'fatal error in counting',cntsp
-        ! stop
-    ! endif 
-    ! d18o_sp(cntsp+1)=d18o_ocn
-    ! d13c_sp(cntsp+1)=d13c_ocn
-    ! ccflx = 0d0
-    ! ccflx(cntsp+1) = ccflxi
-    
+#ifdef track2
+    if (cntsp+1/=nspcc) then
+        print*,'fatal error in counting',cntsp
+        stop
+    endif 
+    d18o_sp(cntsp+1)=d18o_ocn
+    d13c_sp(cntsp+1)=d13c_ocn
+    ccflx = 0d0
+    ccflx(cntsp+1) = ccflxi
+#endif 
+#ifdef size 
+    ccflx = 0d0
+    flxfin=flxfini 
+    ccflx(1) = flxfin*ccflxi
+    ccflx(5) = (1d0-flxfin)*ccflxi
+#endif 
     ! d13c_ocn = d13c_ocni 
     ! d18o_ocn = d18o_ocni
     ! ccflx = 0d0
     ! ccflx(1) = ccflxi
-    dep = 4.0d0
+    dep = depi
 endif
+#endif 
 
 d18o_flx = sum(d18o_sp(:)*ccflx(:))/ccflxi
 d13c_flx = sum(d13c_sp(:)*ccflx(:))/ccflxi
 
+#ifndef track2
+if (abs(d13c_flx - d13c_ocn)>tol .or. abs(d18o_flx - d18o_ocn)>tol) then 
+    print*,'error in assignment of proxy'
+    write(file_err,*)'error in assignment of proxy',d18o_ocn,d13c_ocn,d18o_flx,d13c_flx
+    stop
+endif 
+#endif
 ! dt = 50d0  ! when difficult to converge with non-local mixing
 
 !! === temperature & pressure and associated boundary changes ====
@@ -793,10 +895,23 @@ co3sat = keqcc/cai
 if (it==1) then  
     write(file_bound,*) '#time  d13c_ocn  d18o_ocn, fluxes of cc:',(isp,isp=1,nspcc),'temp  dep  sal  dici  alki  o2i'
 endif 
+#ifndef size 
 write(file_bound,*) time, d13c_ocn, d18o_ocn, (ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+#else 
+write(file_bound,*) time, d13c_ocn, d18o_ocn, sum(ccflx(1:4)),sum(ccflx(5:8)),(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+#endif 
 #endif 
 
 itr_w = 0 
+err_w_min = 1d4
+
+itr_f = 0
+err_f_min = 1d4
+dfrt_df = 0d0
+d2frt_df2 = 0d0
+
+err_f = 0d0
+err_fx = 0d0
 
 300 continue 
 
@@ -952,7 +1067,8 @@ do iz = 1,nz
             col = 1 + (iiz-1)*nsp 
             if (trans(iiz,iz,1)==0d0) cycle
             ! amx(row,col) = amx(row,col) -trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))
-            amx(row,col) = amx(row,col) -trans(iiz,iz,1)/dz(iz)*dz(iiz)
+            amx(row,col) = amx(row,col) -trans(iiz,iz,1)/dz(iz)*dz(iiz)*(1d0-poro(iiz))
+            ! amx(row,col) = amx(row,col) -trans(iiz,iz,1)/dz(iz)*dz(iiz)
         enddo
     else 
         do iiz = 1, nz
@@ -1012,7 +1128,8 @@ do iz = 1,nz
         do iiz = 1, nz
             if (trans(iiz,iz,1)==0d0) cycle
             ! omdif = omdif -trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))*dz(iz)*omx(iiz)
-            omdif = omdif -trans(iiz,iz,1)/dz(iz)*dz(iiz)*dz(iz)*omx(iiz)
+            omdif = omdif -trans(iiz,iz,1)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*dz(iz)*omx(iiz)
+            ! omdif = omdif -trans(iiz,iz,1)/dz(iz)*dz(iiz)*dz(iz)*omx(iiz)
         enddo
     else
         do iiz = 1, nz
@@ -1325,7 +1442,8 @@ do iz=1,nz
         do iiz = 1, nz
             if (trans(iiz,iz,1)==0d0) cycle
             ! dw(iz) = dw(iz) - mvom*(-trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))*omx(iiz))
-            dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*dz(iiz)*omx(iiz))
+            dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*omx(iiz))
+            ! dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*dz(iiz)*omx(iiz))
         enddo
     ! endif
     else 
@@ -1336,6 +1454,10 @@ do iz=1,nz
             enddo
         endif
     endif
+enddo
+
+do iz=1,nz
+    if (omx(iz)<1d-30) omx(iz)=1d-30  !! minimum value 
 enddo
 
 ! print*,oxco2
@@ -1373,12 +1495,22 @@ ymx = 0d0
 call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
 if (infosbr==1) then 
     dt=dt/10d0
-    go to 300
+    ! go to 300
+#ifdef sense
+    go to 500
+#else
+    stop
+#endif 
 endif 
 call calcdevs(dicx,alkx,temp,sal,dep,nz,infosbr,dco3_dalk,dco3_ddic)
 if (infosbr==1) then 
     dt=dt/10d0
-    go to 300
+    ! go to 300
+#ifdef sense
+    go to 500
+#else
+    stop
+#endif 
 endif 
 ! print*, dco3_dalk
 ! stop
@@ -1665,9 +1797,13 @@ do iz = 1,nz
                 ! ymx(row+isp-1) = ymx(row+isp-1) &
                     ! - trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))*ccx(iiz,isp)
                 amx(row+isp-1,col+isp-1) = amx(row+isp-1,col+isp-1) &
-                    - trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*ccx(iiz,isp)
+                    - trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*ccx(iiz,isp)
                 ymx(row+isp-1) = ymx(row+isp-1) &
-                    - trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*ccx(iiz,isp)
+                    - trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*ccx(iiz,isp)
+                ! amx(row+isp-1,col+isp-1) = amx(row+isp-1,col+isp-1) &
+                    ! - trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*ccx(iiz,isp)
+                ! ymx(row+isp-1) = ymx(row+isp-1) &
+                    ! - trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*ccx(iiz,isp)
             enddo
         else
             do iiz = 1, nz
@@ -1897,7 +2033,12 @@ enddo
 call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
 if (infosbr==1) then 
     dt=dt/10d0
-    go to 300
+    ! go to 300
+#ifdef sense
+    go to 500
+#else
+    stop
+#endif 
 endif 
 
 cctflx =0d0 
@@ -2018,7 +2159,8 @@ do iz = 1,nz
             do iiz = 1, nz
                 if (trans(iiz,iz,isp+2)==0d0) cycle
                 ! ccdif(isp) = ccdif(isp) -trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))*dz(iz)*ccx(iiz,isp)
-                ccdif(isp) = ccdif(isp) -trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*dz(iz)*ccx(iiz,isp)
+                ccdif(isp) = ccdif(isp) -trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*dz(iz)*ccx(iiz,isp)
+                ! ccdif(isp) = ccdif(isp) -trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*dz(iz)*ccx(iiz,isp)
             enddo
         else 
             do iiz = 1, nz
@@ -2031,7 +2173,8 @@ do iz = 1,nz
             do iiz = 1, nz
                 if (trans(iiz,iz,isp+2)==0d0) cycle
                 ! dw(iz) = dw(iz) - mvcc*(-trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))*ccx(iiz,isp))
-                dw(iz) = dw(iz) - mvcc*(-trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*ccx(iiz,isp))
+                dw(iz) = dw(iz) - mvcc*(-trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*ccx(iiz,isp))
+                ! dw(iz) = dw(iz) - mvcc*(-trans(iiz,iz,isp+2)/dz(iz)*dz(iiz)*ccx(iiz,isp))
             enddo
         ! endif
         else 
@@ -2174,7 +2317,8 @@ do iz = 1,nz
             col = 1 + (iiz-1)*nsp
             if (trans(iiz,iz,2)==0d0) cycle
             ! amx(row,col) = amx(row,col) -trans(iiz,iz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz))
-            amx(row,col) = amx(row,col) -trans(iiz,iz,2)/dz(iz)*dz(iiz)
+            amx(row,col) = amx(row,col) -trans(iiz,iz,2)/dz(iz)*dz(iiz)*(1d0-poro(iiz))
+            ! amx(row,col) = amx(row,col) -trans(iiz,iz,2)/dz(iz)*dz(iiz)
         enddo
     else 
         do iiz = 1, nz
@@ -2300,7 +2444,8 @@ do iz = 1,nz
         do iiz = 1, nz
             if (trans(iiz,iz,2)==0d0) cycle
             ! dw(iz) = dw(iz) - mvsed*(-trans(iiz,iz)*ptx(iiz)/dz(iz)*(1d0-poro(iz))*dz(iiz)/(1d0-poro(iiz)))
-            dw(iz) = dw(iz) - mvsed*(-trans(iiz,iz,2)*ptx(iiz)/dz(iz)*dz(iiz))
+            dw(iz) = dw(iz) - mvsed*(-trans(iiz,iz,2)*ptx(iiz)/dz(iz)*dz(iiz)*(1d0-poro(iiz)))
+            ! dw(iz) = dw(iz) - mvsed*(-trans(iiz,iz,2)*ptx(iiz)/dz(iz)*dz(iiz))
         enddo
     ! endif
     else 
@@ -2333,11 +2478,13 @@ write(file_ptflx,*) time, pttflx, ptdif, ptadv, ptrain, ptres
         ! stop
     ! endif
 ! endif
+err_fx = maxval(abs(frt - 1d0))
 do iz=1,nz 
     rho(iz) = omx(iz)*mom + ptx(iz)*msed +  sum(ccx(iz,:))*mcc
     frt(iz) = omx(Iz)*mvom + ptx(iz)*mvsed + sum(ccx(iz,:))*mvcc
 enddo 
-
+err_f = maxval(abs(frt - 1d0))
+if (err_f < err_fx) err_f_min = err_f
 !! calculation of burial velocity =============================
 
 wx = w
@@ -2471,20 +2618,20 @@ error = 1d4
 ! if (time>time_spn .and. time <= time_spn + time_trs) w = w*frt
 
 !!!! IF modifying porosity each time !!!!!!!!!!!!!!
-
-! calgg = ccx(nz)*mcc/rho(nz)
+! #ifdef sense 
+! calgg = sum(ccx(nz,:))*mcc/rho(nz)
 ! pore_max =  1d0 - ( 0.483d0 + 0.45d0 * calgg) / 2.5d0
 ! exp_pore = 0.25d0*calgg + 3.d0 *(1d0-calgg)
 ! poro = EXP(-z/exp_pore) * (1.d0-pore_max) + pore_max 
 
-! ff = poro*poro*poro  ! Archer 
+! ff = poro*poro  ! Archer 
 
 ! dif_dic = dif_dic0*ff
 ! dif_alk = dif_alk0*ff
 ! dif_o2 = dif_o20*ff
 
 ! sporo = 1d0 - poro
-
+! #endif 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! if (any(w<0d0)) then
@@ -2550,8 +2697,53 @@ do iz=1,nz-1
         if (w(iz)>=0d0 .and. w(iz+1) < 0d0) then
             ! cnr(iz+1)=0
             ! dwn(iz+1)=1
-            cnr(iz+1)=abs(w(iz))/(abs(w(iz+1))+abs(w(iz)))
-            cnr(iz)=abs(w(iz+1))/(abs(w(iz+1))+abs(w(iz)))
+            ! cnr(iz+1)=abs(frt(iz)-1d0)/(abs(frt(iz+1)-1d0)+abs(frt(iz)-1d0))
+            ! cnr(iz)=abs(frt(iz+1)-1d0)/(abs(frt(iz+1)-1d0)+abs(frt(iz)-1d0))
+            
+            ! if (itr_f == 0) then 
+                ! corrf = 2d0
+                ! corrf = abs(w(iz)**corrf)/(abs(w(iz+1)**corrf)+abs(w(iz)**corrf))
+            ! elseif (itr_f == 1) then 
+                ! if (corrf>0.5d0) then
+                    ! df = -0.5d0*corrf
+                ! else 
+                    ! df = 0.5d0*corrf
+                ! endif 
+                ! if (corrf+df >=1d0) df = 1d0-corrf
+                ! if (corrf+df <=0d0) df = -corrf
+                ! corrf = corrf + df
+            ! elseif (itr_f == 2) then 
+                ! dfrt_df = (err_f -err_fx)/df
+                ! if (dfrt_df <0d0) then 
+                    ! df = 0.5d0*corrf
+                ! else 
+                    ! df = -0.5d0*corrf
+                ! endif 
+                ! if (corrf+df >=1d0) df = 1d0-corrf
+                ! if (corrf+df <=0d0) df = -corrf
+                ! corrf = corrf + df
+            ! elseif (itr_f >=3) then 
+                ! dfrt_dfx = dfrt_df
+                ! dfrt_df = (err_f -err_fx)/df
+                ! d2frt_df2 = (dfrt_df - dfrt_dfx)/df
+                ! if (dfrt_df <0d0) then 
+                    ! df = 0.5d0*corrf
+                ! else 
+                    ! df = -0.5d0*corrf
+                ! endif 
+                ! if (corrf+df >=1d0) df = 1d0-corrf
+                ! if (corrf+df <=0d0) df = -corrf
+                ! corrf = corrf + df
+            ! endif 
+            ! itr_f = itr_f + 1
+            ! cnr(iz+1) = corrf
+            ! cnr(iz) = 1d0-corrf
+            
+            corrf = 2d0
+            cnr(iz+1)=abs(w(iz)**corrf)/(abs(w(iz+1)**corrf)+abs(w(iz)**corrf))
+            cnr(iz)=abs(w(iz+1)**corrf)/(abs(w(iz+1)**corrf)+abs(w(iz)**corrf))
+            ! cnr(iz+1)=abs(w(iz))/(abs(w(iz+1))+abs(w(iz)))
+            ! cnr(iz)=abs(w(iz+1))/(abs(w(iz+1))+abs(w(iz)))
             dwn(iz+1)=1d0-cnr(iz+1)
             up(iz)=1d0-cnr(iz)
         endif 
@@ -2562,8 +2754,10 @@ do iz=1,nz-1
             cnr(iz)=0
             up(iz+1)=1
             dwn(iz)=1
-            adf(iz)=0.5d0
-            adf(iz+1)=0.5d0
+            ! adf(iz)=0.5d0
+            ! adf(iz+1)=0.5d0
+            adf(iz)=abs(w(iz+1))/(abs(w(iz+1))+abs(w(iz)))
+            adf(iz+1)=abs(w(iz))/(abs(w(iz+1))+abs(w(iz)))
         endif 
     endif 
 enddo       
@@ -2576,9 +2770,21 @@ enddo
 ! enddo
 itr_w = itr_w + 1
 err_w = maxval(abs((w-wx)/wx))
+! if (maxval(abs(frt - 1d0))<err_f_min) then 
+if (err_w<err_w_min) then 
+    ! err_f_min= maxval(abs(frt - 1d0))
+    err_w_min= err_w
+    wxx = wx  ! recording w which minimizes deviation of total sld fraction from 1 
+endif 
 if (itr_w>100) then 
-    write(file_err,*) 'not converging w',time, err_w
-    go to 400
+    if (itr_w==101) then 
+        w = wxx
+        go to 300
+    elseif (itr_w==102) then 
+        w = wxx
+        write(file_err,*) 'not converging w',time, err_w, err_w_min
+        go to 400
+    endif 
 endif
 if (err_w > tol) go to 300
 ! if (err_w > 1d-2) go to 300
@@ -2610,6 +2816,12 @@ endif
 do iz=1,nz 
     d18o_blk(iz) = sum(d18o_sp(:)*ccx(iz,:))/sum(ccx(iz,:))
     d13c_blk(iz) = sum(d13c_sp(:)*ccx(iz,:))/sum(ccx(iz,:))
+#ifdef size
+    d18o_blkf(iz) = sum(d18o_sp(1:4)*ccx(iz,1:4))/sum(ccx(iz,1:4))
+    d13c_blkf(iz) = sum(d13c_sp(1:4)*ccx(iz,1:4))/sum(ccx(iz,1:4))
+    d18o_blkc(iz) = sum(d18o_sp(5:8)*ccx(iz,5:8))/sum(ccx(iz,5:8))
+    d13c_blkc(iz) = sum(d13c_sp(5:8)*ccx(iz,5:8))/sum(ccx(iz,5:8))
+#endif 
 enddo
 
 #ifndef nonrec
@@ -2721,12 +2933,32 @@ endif
 
 #ifndef nonrec 
 write(file_totfrac,*) time,maxval(abs(frt - 1d0))
-write(file_sigmly,*) time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) &
-    ,sum(ccx(izrec,:))*mcc/rho(izrec)*100d0,ptx(izrec)*msed/rho(izrec)*100d0
-write(file_sigmlyd,*) time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2) &
-    ,sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0
-write(file_sigbtm,*) time-age(nz),d13c_blk(nz),d18o_blk(nz) &
-    ,sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0
+#ifndef size 
+! if (.not.any(w<0d0)) then  ! not recording when burial is negative 
+if (all(w>=0d0)) then  ! not recording when burial is negative 
+    write(file_sigmly,*) time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) &
+        ,sum(ccx(izrec,:))*mcc/rho(izrec)*100d0,ptx(izrec)*msed/rho(izrec)*100d0
+    write(file_sigmlyd,*) time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2) &
+        ,sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0
+    write(file_sigbtm,*) time-age(nz),d13c_blk(nz),d18o_blk(nz) &
+        ,sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0
+endif 
+#else 
+if (all(w>=0d0)) then  ! not recording when burial is negative 
+    write(file_sigmly,*) time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) &
+        ,sum(ccx(izrec,:))*mcc/rho(izrec)*100d0,ptx(izrec)*msed/rho(izrec)*100d0  &
+        ,d13c_blkf(izrec),d18o_blkf(izrec),sum(ccx(izrec,1:4))*mcc/rho(izrec)*100d0  &
+        ,d13c_blkc(izrec),d18o_blkc(izrec),sum(ccx(izrec,5:8))*mcc/rho(izrec)*100d0  
+    write(file_sigmlyd,*) time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2) &
+        ,sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0  &
+        ,d13c_blkf(izrec2),d18o_blkf(izrec2),sum(ccx(izrec2,1:4))*mcc/rho(izrec2)*100d0  &
+        ,d13c_blkc(izrec2),d18o_blkc(izrec2),sum(ccx(izrec2,5:8))*mcc/rho(izrec2)*100d0  
+    write(file_sigbtm,*) time-age(nz),d13c_blk(nz),d18o_blk(nz) &
+        ,sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0 &
+        ,d13c_blkf(nz),d18o_blkf(nz),sum(ccx(nz,1:4))*mcc/rho(nz)*100d0  &
+        ,d13c_blkc(nz),d18o_blkc(nz),sum(ccx(nz,5:8))*mcc/rho(nz)*100d0  
+endif 
+#endif
 #endif 
 
 ! pause
