@@ -13,9 +13,9 @@ implicit none
 
 integer(kind=4),parameter :: nz = 100
 #ifdef sense
-integer(kind=4),parameter :: nspcc = 1
+integer(kind=4),parameter :: nspcc = 12
 #elif defined track2
-integer(kind=4),parameter :: nspcc = 22
+integer(kind=4),parameter :: nspcc = 42
 #elif defined size
 integer(kind=4),parameter :: nspcc = 8
 #else
@@ -62,6 +62,8 @@ real(kind=8) :: om2cc = 0.666d0  ! rain ratio of organic matter to calcite
 real(kind=8) :: o2th = 0d0 ! threshold oxygen level below which not to calculate 
 real(kind=8) :: dev = 1d-6 ! deviation addumed 
 real(kind=8) :: zml_ref = 12d0 ! mixed layer depth
+real(kind=8) :: ccx_th = 1d-300
+real(kind=8) :: omx_th = 1d-300
 real(kind=8) dif_alk0, dif_dic0, dif_o20, zml(nspcc+2) , zrec, zrec2, chgf, flxfin, flxfini, flxfinf
 real(kind=8) pore_max, exp_pore, calgg  ! parameters to determine porosity in Archer
 real(kind=8) mvom, mvsed, mvcc  ! molar volumes (cm3 mol-1) mv_i = m_i/rho_i
@@ -77,7 +79,11 @@ real(kind=8) kcc(nz,nspcc)
 real(kind=8) kom(nz), oxco2(nz),anco2(nz) 
 real(kind=8) w(nz) , wi, dw(nz), wx(nz), err_w, wxx(nz),err_f_min, dfrt_df, d2frt_df2, dfrt_dfx, err_w_min
 real(kind=8) z(nz), dz(nz), eta(nz), beta, dage(nz), age(nz) 
+#ifdef sense
+real(kind=8) :: ztot = 50d0 ! cm 
+#else
 real(kind=8) :: ztot = 500d0 ! cm 
+#endif
 integer(kind=4) :: nsp = 3  ! independent chemical variables 
 integer(kind=4) :: nmx 
 real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:)
@@ -241,10 +247,17 @@ do iz = 1, nz
     endif
 enddo
 
+! eta = ztot*log((beta+(z/ztot)**2d0)/(beta-(z/ztot)**2d0))/log((beta+1d0)/(beta-1d0))
+! print*,eta
+! stop
+
 do iz=1,nz
     if (iz==1) z(iz)=dz(iz)*0.5d0
     if (iz/=1) z(iz) = z(iz-1)+dz(iz-1)*0.5d0 + 0.5d0*dz(iz)
 enddo
+
+! print*,z
+! stop
 
 !~~~~~~~~~~~~~ saving grid for LABS ~~~~~~~~~~~~~~~~~~~~~~
 #ifdef recgrid
@@ -387,6 +400,10 @@ time_aft = time_trs*3d0
 time_trs = 0d0
 time_aft = 0d0 
 #endif 
+#ifdef biotest
+time_trs = 5d3
+time_aft = time_trs*10d0 
+#endif 
 do itrec=1,nrec/3
     rectime(itrec)=itrec*time_spn/real(nrec/3)
 enddo
@@ -407,7 +424,7 @@ close(file_tmp)
 #endif
 
 depi = 4d0
-depf = 5d0
+depf = 4d0
 
 flxfini = 0.5d0
 flxfinf = 0.9d0
@@ -727,8 +744,10 @@ if (time <= time_spn) then
 #ifdef size 
     ccflx = 0d0
     flxfin = flxfini
-    ccflx(1) = flxfin*ccflxi
-    ccflx(5) = (1d0-flxfin)*ccflxi
+    ! ccflx(1) = flxfin*ccflxi
+    ! ccflx(5) = (1d0-flxfin)*ccflxi
+    ccflx(1) = (1d0-flxfin)*ccflxi
+    ccflx(5) = flxfin*ccflxi
 #endif 
 elseif (time>time_spn .and. time<=time_spn+time_trs) then 
     dt = time_trs/5000d0
@@ -743,7 +762,7 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
         d18o_ocn = 2d0*d18o_ocnf - d18o_ocni - (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
         flxfin = 2d0*flxfinf - flxfini - (time-time_spn)*(flxfinf-flxfini)/time_trs*2d0
     endif
-    
+#ifndef biotest    
     if (time-time_spn<=time_trs/10d0) then
         d13c_ocn = d13c_ocni + (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*10d0
         ! d18o_ocn = d18o_ocni + (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
@@ -756,7 +775,7 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
         ! d18o_ocn = 2d0*d18o_ocnf - d18o_ocni - (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0
         dep = 10d0*depf-9d0*depi - (depf-depi)*(time-time_spn)/time_trs*10d0
     endif
-    
+#endif    
     ! d18o_ocn = (d18o_ocni+d18o_ocnf)*0.5d0 + (d18o_ocni-d18o_ocnf)*0.5*cos((time-time_spn)*2d0*pi/(time_trs/4d0)) 
     
     ! print*,d13c_ocn
@@ -803,13 +822,38 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
         stop
     enddo 
 #ifdef track2    
-    if (mod(it,int(5000/(nspcc-2)))==0) then  
-        cntsp=cntsp+1
-        d18o_sp(cntsp)=d18o_ocn
-        d13c_sp(cntsp)=d13c_ocn
-        ccflx = 0d0
-        ccflx(cntsp) = ccflxi
+    if (time-time_spn<=time_trs/10d0) then
+        if (mod(it,int(5000/(nspcc-2)))==0) then  
+            cntsp=cntsp+1
+            d18o_sp(cntsp)=d18o_ocn
+            d13c_sp(cntsp)=d13c_ocn
+            ccflx = 0d0
+            ccflx(cntsp) = ccflxi
+        endif 
+    elseif (time-time_spn>time_trs/10d0 .and. time-time_spn<=time_trs/10d0*9d0) then
+        if (mod(it,int(5000/(nspcc-2)))==0) then  
+            cntsp=cntsp+1
+            d18o_sp(cntsp)=d18o_ocn
+            d13c_sp(cntsp)=d13c_ocn
+            ccflx = 0d0
+            ccflx(cntsp) = ccflxi
+        endif 
+    elseif  (time-time_spn>time_trs/10d0*9d0) then 
+        if (mod(it,int(5000/(nspcc-2)))==0) then  
+            cntsp=cntsp+1
+            d18o_sp(cntsp)=d18o_ocn
+            d13c_sp(cntsp)=d13c_ocn
+            ccflx = 0d0
+            ccflx(cntsp) = ccflxi
+        endif 
     endif 
+    ! if (mod(it,int(5000/(nspcc-2)))==0) then  
+        ! cntsp=cntsp+1
+        ! d18o_sp(cntsp)=d18o_ocn
+        ! d13c_sp(cntsp)=d13c_ocn
+        ! ccflx = 0d0
+        ! ccflx(cntsp) = ccflxi
+    ! endif 
 #else 
     do isp=1,nspcc
         ccflx(isp)=flxfrc2(isp)*ccflxi
@@ -818,10 +862,12 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then
     
 #ifdef size
     do isp=1,4
-        ccflx(isp)=flxfrc2(isp)*ccflxi*flxfin
+        ! ccflx(isp)=flxfrc2(isp)*ccflxi*flxfin
+        ccflx(isp)=flxfrc2(isp)*ccflxi*(1d0-flxfin)
     enddo
     do isp=5,8
-        ccflx(isp)=flxfrc2(isp-4)*ccflxi*(1d0-flxfin)
+        ! ccflx(isp)=flxfrc2(isp-4)*ccflxi*(1d0-flxfin)
+        ccflx(isp)=flxfrc2(isp-4)*ccflxi*flxfin
     enddo
 #endif 
     
@@ -855,9 +901,18 @@ elseif (time>time_spn+time_trs) then
 #ifdef size 
     ccflx = 0d0
     flxfin=flxfini 
-    ccflx(1) = flxfin*ccflxi
-    ccflx(5) = (1d0-flxfin)*ccflxi
+    ! ccflx(1) = flxfin*ccflxi
+    ! ccflx(5) = (1d0-flxfin)*ccflxi
+    ccflx(1) = (1d0-flxfin)*ccflxi
+    ccflx(5) = flxfin*ccflxi
 #endif 
+#ifdef biotest 
+    d13c_ocn = d13c_ocnf 
+    d18o_ocn = d18o_ocni
+    ccflx = 0d0
+    ccflx(3) = ccflxi
+#endif 
+    ! dep = 6.0d0
     ! d13c_ocn = d13c_ocni 
     ! d18o_ocn = d18o_ocni
     ! ccflx = 0d0
@@ -1156,9 +1211,10 @@ if (any(isnan(omx))) then
     stop
 endif 
 
+#ifndef nonrec
 if (it==1) write(file_omflx,*)'time, omtflx, omadv, omdec, omdif, omrain, omres'
 write(file_omflx,*)time, omtflx, omadv, omdec, omdif, omrain, omres
-
+#endif 
 ! stop
 
 !~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1351,10 +1407,10 @@ enddo
 endif
 
 o2res = o2dec + o2dif + o2tflx 
-
+#ifndef nonrec
 if (it==1) write(file_o2flx,*)'time, o2dec, o2dif, o2tflx, o2res'
 write(file_o2flx,*)time,o2dec, o2dif,o2tflx,o2res
-
+#endif 
 zoxx = 0d0
 do iz=1,nz
     if (o2x(iz)<=0d0) exit
@@ -1457,7 +1513,7 @@ do iz=1,nz
 enddo
 
 do iz=1,nz
-    if (omx(iz)<1d-30) omx(iz)=1d-30  !! minimum value 
+    if (omx(iz)<omx_th) omx(iz)=omx_th  !! minimum value 
 enddo
 
 ! print*,oxco2
@@ -1958,8 +2014,8 @@ do iz = 1, nz
         else
             ccx(iz,isp) = ccx(iz,isp)*exp(ymx(row+isp-1))
         endif
-        if (ccx(iz,isp)<1d-30) then
-            ccx(iz,isp)=1d-30
+        if (ccx(iz,isp)<ccx_th) then
+            ccx(iz,isp)=ccx_th
             ymx(row+isp-1) = 0d0
         endif
     enddo
@@ -2485,6 +2541,9 @@ do iz=1,nz
 enddo 
 err_f = maxval(abs(frt - 1d0))
 if (err_f < err_fx) err_f_min = err_f
+#ifdef sense
+if (err_f < tol) exit
+#endif 
 !! calculation of burial velocity =============================
 
 wx = w
@@ -2739,7 +2798,7 @@ do iz=1,nz-1
             ! cnr(iz+1) = corrf
             ! cnr(iz) = 1d0-corrf
             
-            corrf = 2d0
+            corrf = 5d0
             cnr(iz+1)=abs(w(iz)**corrf)/(abs(w(iz+1)**corrf)+abs(w(iz)**corrf))
             cnr(iz)=abs(w(iz+1)**corrf)/(abs(w(iz+1)**corrf)+abs(w(iz)**corrf))
             ! cnr(iz+1)=abs(w(iz))/(abs(w(iz+1))+abs(w(iz)))
