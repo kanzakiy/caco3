@@ -9,11 +9,19 @@ program caco3
 ! to compile, type 'gfortran -c caco3_therm.f90 -g -fcheck=all;
 ! gfortran -cpp -Dtest  caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
 ! allow fraction to advection scheme e.g., 0.5 upwind + 0.5 central scheme
+!====================================
+! cpp options 
+! sense   :  not doing any signal change experiments, used for lysocline and CaCO3 burial calculations 
+! track2  :  tracking signals with multipe CaCO3 species at different time steps
+! size    :  two types of CaCO3 species with different sizes 
+! nonrec  :  not storing the profile files but only CaCO3 conc. and burial flux at the end of simulation 
+! nondisp :  not displaying the results 
+! ===================================
 implicit none
 
-integer(kind=4),parameter :: nz = 100
+integer(kind=4),parameter :: nz = 100  ! grid number 
 #ifdef sense
-integer(kind=4),parameter :: nspcc = 12
+integer(kind=4),parameter :: nspcc = 12  ! number of CaCO3 species 
 #elif defined track2
 integer(kind=4),parameter :: nspcc = 42
 #elif defined size
