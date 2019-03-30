@@ -15,3 +15,5 @@ http://qiita.com/AnchorBlues/items/69c1744de818b5e045ab
 4. make BINARY=64 CC="gcc -m64" FC="gfortran -m64"
 5. su
 6. make PREFIX=/usr/local install
+
+See https://github.com/PetterS/SuiteSparse/tree/master/UMFPACK for UMFPACK
