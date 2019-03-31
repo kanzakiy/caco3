@@ -8,7 +8,7 @@ Need BLAS (& UMFPACK if the number of CaCO3 species is large) libraries
 Following http://www.hnagata.net/archives/212
 And http://www5.hp-ez.com/hp/calculations/page17
 http://qiita.com/AnchorBlues/items/69c1744de818b5e045ab
-[] OpenBLAS (+lapack)
+   OpenBLAS (+lapack)
 1. download: http://www.openblas.net/ -> TAR
 2. tar zxvf OpenBLAS-0.2.20.tar.gz
 3. cd OpenBLAS-0.2.20
@@ -17,3 +17,26 @@ http://qiita.com/AnchorBlues/items/69c1744de818b5e045ab
 6. make PREFIX=/usr/local install
 
 See https://github.com/PetterS/SuiteSparse/tree/master/UMFPACK for UMFPACK
+
+Note that UMFPACK is usually not necessary. 
+
+Simulation can be run by following steps:
+(a) specify directory where results are stored in caco3_test_mod_v5_5.f90 (lines 235 and 2650) 
+(b) comment/comment out macros in defines.h 
+(c) compile by typing: 
+    'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o -lopenblas -g -fcheck=all'
+    if you do not have UMFPACK 
+    or 'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o 
+    -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
+    if you have UMFPACK 
+(d) run by './a.exe cc caco3_rainflux_value rr om/caco3_rain_ratio_value dep water_depth_value dt time_step_value fl simulation_name'
+    where caco3_rainflux_value, om/caco3_rain_ratio_value, water_depth_value, time_step_value and simulation_name are your inputs. 
+    water_depth_value represents water depth when simulation does not track proxy signals ('sense' macro is defined in defines.h), and 
+    maximum water depth when proxy signal is tracked (i.e., when 'sense' is not defined in defines.h). 
+    
+In step (b) above, you need to define macros in defines.h to simulate what you want. 
+E.g.,
+(1) With defining 'sense' with/without 'oxonly', you can run the model to predict lysoclines and caco3 burial fluxes.  
+(2) With defining 'biotest', you can test bioturbation effect in 5 kyr signal tracking. 
+(3) With defining 'track2', you can test different signal tracking method.
+(4) With defining 'size', you can track two different types of caco3 species. 
