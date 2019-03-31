@@ -1,16 +1,8 @@
 program caco3 
 ! trying a simple diagenesis
 ! irregular grid
-! attempt to allow negative burial from v3_2 (which works until non-local mixing is considered) 
-! allow multiple carbonate species developed from v3_3 
-! allow different transition matrix and reactivity for different species, developed from v5_2 
-! enabling separate signal tracking developed from v5_3
-! enabling large number of species with sparse matrix solver
-! to compile, type 'gfortran -c caco3_therm.f90 -g -fcheck=all;
-! gfortran -cpp -Dtest  caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
-! allow fraction to advection scheme e.g., 0.5 upwind + 0.5 central scheme
 !====================================
-! cpp options 
+! cpp options (see also defines.h)
 ! sense    :  not doing any signal change experiments, used for lysocline and CaCO3 burial calculations 
 ! biotest  :  examining different styles of biotubation 
 ! track2   :  tracking signals with multipe CaCO3 species at different time steps
@@ -21,7 +13,7 @@ program caco3
 ! sparse   :  use sparse matrix solver for caco3 and co2 system 
 ! ===================================
 implicit none
-
+#include <defines.h>
 integer(kind=4),parameter :: nz = 100  ! grid number 
 #ifdef sense
 integer(kind=4),parameter :: nspcc = 1  ! number of CaCO3 species 
@@ -177,6 +169,18 @@ integer(kind=4) status
 integer(kind=8) symbolic
 integer(kind=4) sys
 real(kind=8), allocatable :: kai(:)  ! x in Ax = B 
+
+#ifdef nobio 
+nobio = .true.
+#elif defined turbo2 
+turbo2 = .true.
+#elif defined labs 
+labs = .true.
+#endif 
+
+#ifdef oxonly
+anoxic = .false. 
+#endif
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)  ! get date and time in character 
 
@@ -445,7 +449,7 @@ close(file_tmp)
 #endif
 
 depi = 4d0  ! depth before event 
-depf = 4d0   ! max depth to be changed to  
+depf = dep   ! max depth to be changed to  
 
 flxfini = 0.5d0  !  total caco3 rain flux for fine species assumed before event 
 flxfinf = 0.9d0 !  maximum changed value 
