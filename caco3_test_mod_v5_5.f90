@@ -1474,7 +1474,7 @@ nmx = nz*nsp  ! col (and row) of matrix; the same number of unknowns
 !           dB(row)/dln(alk(iz)) = dB(row)/dalk(iz)*dalk(iz)/dln(alk(iz)) =  dB(row)/dalk(iz) * alkx(iz) = drcc_dalk(iz)*alkx(iz)
 !           ln x = ln x0 + delta, or, x = x0*exp(delta)
 !
-!       See e.g., Lasaga and Steefel (1994) for more details. 
+!       See e.g., Steefel and Lasaga (1994) for more details. 
 
 deallocate(amx,ymx,emx,ipiv)
 allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
