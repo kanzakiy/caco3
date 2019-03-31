@@ -974,7 +974,7 @@ nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be 
 !  and thus the above equation fills the matrix A as  
 !
 !               A(2,1) =  (-sporo(1)*w(1)*1)/dz(2)
-!               A(2,1) =  sporo(2)*(1)/dt + (sporo(2)*w(2)*1)/dz(2) + sporo(2)*kom(2)*1
+!               A(2,2) =  sporo(2)*(1)/dt + (sporo(2)*w(2)*1)/dz(2) + sporo(2)*kom(2)*1
 !
 !  and the matrix B as 
 !
