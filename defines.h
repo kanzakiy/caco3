@@ -20,7 +20,7 @@
 !#define nonrec
 
 ! shwoing every iteration 
-!#define showiter
+! #define showiter
 
 ! using sparse matrix solve (you need UMFPACK) 
 #define sparse
@@ -36,3 +36,6 @@
 
 ! enabling only oxic degradation of om 
 !#define oxonly
+
+! recording the grid to be used for making transition matrix in LABS 
+!#define recgrid
