@@ -24,14 +24,14 @@ Simulation can be run by following steps:
 (a) specify directory where results are stored in caco3_test_mod_v5_5.f90 (lines 235 and 2650) 
 (b) comment/comment out macros in defines.h 
 (c) compile by typing: 
+    [if you do not have UMFPACK]
     'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o -lopenblas -g -fcheck=all'
-    if you do not have UMFPACK 
-    or 'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o 
+    [if you have UMFPACK] 
+    'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o 
     -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
-    if you have UMFPACK 
 (d) run by './a.exe cc caco3_rainflux_value rr om/caco3_rain_ratio_value dep water_depth_value dt time_step_value fl simulation_name'
-    where caco3_rainflux_value, om/caco3_rain_ratio_value, water_depth_value, time_step_value and simulation_name are your inputs. 
-    water_depth_value represents water depth when simulation does not track proxy signals ('sense' macro is defined in defines.h), and 
+    where caco3_rainflux_value [umol cm2 yr-1], om/caco3_rain_ratio_value, water_depth_value [km], time_step_value [yr] and simulation_name are your inputs. 
+    The water_depth_value [km] represents water depth when simulation does not track proxy signals ('sense' macro is defined in defines.h), and 
     maximum water depth when proxy signal is tracked (i.e., when 'sense' is not defined in defines.h). 
     
 In step (b) above, you need to define macros in defines.h to simulate what you want. 
@@ -40,3 +40,7 @@ E.g.,
 (2) With defining 'biotest', you can test bioturbation effect in 5 kyr signal tracking. 
 (3) With defining 'track2', you can test different signal tracking method.
 (4) With defining 'size', you can track two different types of caco3 species. 
+(5) You need switch on 'sparse' to use sparse matrix solver (you need UMFPACK in this case). 
+
+Default run can be made with switching off all options (commenting out all options in defines.h), 
+which track 2 isotope signals with 4 caco3 species for 50 kyr isotope shift event assuming Fickian mixing for bioturbation. 
