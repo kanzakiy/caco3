@@ -11,7 +11,7 @@
 !#define sense
 
 ! using method2 to track signals (default 42 species)
-!#define track2 
+! #define track2 
 
 ! not showing results on display 
 !#define nondisp
@@ -26,13 +26,13 @@
 #define sparse
 
 ! all turbo2 mixing 
-!#define turbo2 
+!#define allturbo2 
 
 ! all labs mixing 
-!#define labs 
+!#define alllabs 
 
 ! no bioturbation 
-#define nobio 
+! #define allnobio 
 
 ! enabling only oxic degradation of om 
 !#define oxonly
