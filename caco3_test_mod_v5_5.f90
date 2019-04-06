@@ -171,11 +171,11 @@ integer(kind=8) symbolic
 integer(kind=4) sys
 real(kind=8), allocatable :: kai(:)  ! x in Ax = B 
 
-#ifdef nobio 
+#ifdef allnobio 
 nobio = .true.
-#elif defined turbo2 
+#elif defined allturbo2 
 turbo2 = .true.
-#elif defined labs 
+#elif defined alllabs 
 labs = .true.
 #endif 
 
@@ -1449,8 +1449,8 @@ nmx = nz*nsp  ! col (and row) of matrix; the same number of unknowns
 !       Expanding around x0 (initial/previous guess), 
 !           f(x) =  f(x0) + f'(x0)*(x-x0) + O((x-x0)**2)  
 !       where f'(x0) represents a Jacobian matrix.
-!       Solution is sought by iteration 
-!           x = x0 - f'(x0)^-1*f(x0) 
+      ! Solution is sought by iteration 
+!           x = x0 - f'(x0)^-1*f(x0) or x- x0 = - f'(x0)^-1*f(x0)
 !       More practically by following steps. 
 !           (1) solving Ax = B where A = f'(x0) and B = -f(x0), which gives delta (i.e., x - x0) (again these are arrays)
 !           (2) update solution by x = x0 + delta  
@@ -1933,7 +1933,7 @@ do iz = 1, nz
         alkx(iz) = alkx(iz)*exp(ymx(row+nspcc+1))
     endif
     if (dicx(iz)<1d-100) ymx(row+nspcc) = 0d0
-    if (alkx(iz)<1d-100) ymx(row+nspcc) = 0d0
+    if (alkx(iz)<1d-100) ymx(row+nspcc+1) = 0d0
 enddo
 
 error = maxval(exp(abs(ymx))) - 1d0
