@@ -341,338 +341,326 @@ time = 0d0
 it = 1
 do 
 
-!! ///////// isotopes & fluxes settings ////////////// 
+    !! ///////// isotopes & fluxes settings ////////////// 
 #ifndef sense    
-call timestep(time,800,5000,1000,dt) ! determine time step dt by calling timestep(time,nt_spn,nt_trs,nt_aft,dt) where nt_xx denotes total iteration number  
-call signal_flx(time)
-call bdcnd(time,dep)
+    call timestep(time,800,5000,1000,dt) ! determine time step dt by calling timestep(time,nt_spn,nt_trs,nt_aft,dt) where nt_xx denotes total iteration number  
+    call signal_flx(time)
+    call bdcnd(time,dep)
 #endif 
 
-! isotope signals represented by caco3 rain fluxes 
-d18o_flx = sum(d18o_sp(:)*ccflx(:))/ccflxi
-d13c_flx = sum(d13c_sp(:)*ccflx(:))/ccflxi
+    ! isotope signals represented by caco3 rain fluxes 
+    d18o_flx = sum(d18o_sp(:)*ccflx(:))/ccflxi
+    d13c_flx = sum(d13c_sp(:)*ccflx(:))/ccflxi
 
 #ifndef track2
-if (abs(d13c_flx - d13c_ocn)>tol .or. abs(d18o_flx - d18o_ocn)>tol) then ! check comparability with input signals 
-    print*,'error in assignment of proxy'
-    write(file_err,*)'error in assignment of proxy',d18o_ocn,d13c_ocn,d18o_flx,d13c_flx
-    stop
-endif 
+    if (abs(d13c_flx - d13c_ocn)>tol .or. abs(d18o_flx - d18o_ocn)>tol) then ! check comparability with input signals 
+        print*,'error in assignment of proxy'
+        write(file_err,*)'error in assignment of proxy',d18o_ocn,d13c_ocn,d18o_flx,d13c_flx
+        stop
+    endif 
 #endif
 
-!! === temperature & pressure and associated boundary changes ====
-! if temperature is changed during signal change event this affect diffusion coeff etc. 
-call coefs(temp,sal,dep)
-!! /////////////////////
+    !! === temperature & pressure and associated boundary changes ====
+    ! if temperature is changed during signal change event this affect diffusion coeff etc. 
+    call coefs(temp,sal,dep)
+    !! /////////////////////
 
 #ifndef nonrec 
-if (it==1) then    !! recording boundary conditions 
-    write(file_bound,*) '#time  d13c_ocn  d18o_ocn, fluxes of cc:',(isp,isp=1,nspcc),'temp  dep  sal  dici  alki  o2i'
-endif 
+    if (it==1) then    !! recording boundary conditions 
+        write(file_bound,*) '#time  d13c_ocn  d18o_ocn, fluxes of cc:',(isp,isp=1,nspcc),'temp  dep  sal  dici  alki  o2i'
+    endif 
 #ifndef size 
-!  recording flues of two types of caco3 separately 
-write(file_bound,*) time, d13c_ocn, d18o_ocn, (ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+    !  recording fluxes of two types of caco3 separately 
+    write(file_bound,*) time, d13c_ocn, d18o_ocn, (ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
 #else 
-!  do not record separately 
-write(file_bound,*) time, d13c_ocn, d18o_ocn, sum(ccflx(1:4)),sum(ccflx(5:8)),(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+    !  do not record separately 
+    write(file_bound,*) time, d13c_ocn, d18o_ocn, sum(ccflx(1:4)),sum(ccflx(5:8)),(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
 #endif 
 #endif 
 
-itr_w = 0  ! # of iteration made to converge w 
-err_w_min = 1d4 ! minimum relative difference of w compared to the previous w 
+    itr_w = 0  ! # of iteration made to converge w 
+    err_w_min = 1d4 ! minimum relative difference of w compared to the previous w 
 
-!  the followings are currently not used !!
-itr_f = 0  ! # of iteration made to converge total vol. fraction of solids 
-err_f_min = 1d4 ! minimum relative difference of total vol. fraction of solids compared to the previous value 
-dfrt_df = 0d0 ! change in total volume fraction divided by change in variable f that is used to tune how advection is calculated where burial changes its signs 
-d2frt_df2 = 0d0  ! change of dfrt_dt by change in variable f 
-!  the above are currently not used !!!!
+    !  the followings are currently not used !!
+    itr_f = 0  ! # of iteration made to converge total vol. fraction of solids 
+    err_f_min = 1d4 ! minimum relative difference of total vol. fraction of solids compared to the previous value 
+    dfrt_df = 0d0 ! change in total volume fraction divided by change in variable f that is used to tune how advection is calculated where burial changes its signs 
+    d2frt_df2 = 0d0  ! change of dfrt_dt by change in variable f 
+    !  the above are currently not used !!!!
 
-err_f = 0d0  !! relative different of total vol. fraction of solids wrt the previous value 
-err_fx = 0d0 !! previous err_f
+    err_f = 0d0  !! relative different of total vol. fraction of solids wrt the previous value 
+    err_fx = 0d0 !! previous err_f
 
-! point where iteration for w is conducted 
-300 continue 
+    ! point where iteration for w is conducted 
+    300 continue 
 
 #ifndef nondisp
-! displaying time step 
-print*,'it :',it,dt
+    ! displaying time step 
+    print*,'it :',it,dt
 #endif
 
-! initializing
-dw = 0d0 ! change in burial rate caused by reaction and non-local mixing 
+    ! initializing
+    dw = 0d0 ! change in burial rate caused by reaction and non-local mixing 
 
-! ~~~~~~~~~ OM & O2 iteration wrt zox ~~~~~~~~~~~~~~~
+    ! ~~~~~~~~~ OM & O2 iteration wrt zox ~~~~~~~~~~~~~~~
 
-oxco2 = 0d0 ! oxic degradation of om 
-anco2 = 0d0 ! anoxic degradation of om 
-itr = 0  ! iteration # for om and o2 calcuation 
-error = 1d4 ! error in ieration for om and o2 
-minerr= 1d4  ! recording minimum relative difference in zox from previously considered zox 
+    oxco2 = 0d0 ! oxic degradation of om 
+    anco2 = 0d0 ! anoxic degradation of om 
+    itr = 0  ! iteration # for om and o2 calcuation 
+    error = 1d4 ! error in ieration for om and o2 
+    minerr= 1d4  ! recording minimum relative difference in zox from previously considered zox 
 
-do while (error > tol)
+    do while (error > tol)
 
-!~~~~~~ OM calculation ~~~~~~~~~~~~~~~~~
-call omcalc()
-! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
-call calcflxom()
-!~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        !~~~~~~ OM calculation ~~~~~~~~~~~~~~~~~
+        call omcalc()
+        ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
+        call calcflxom()
+        !~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
-    call o2calc_ox()
-    !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
-    call calcflxo2_ox()
-else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
-    call o2calc_sbox()
-    ! fluxes relevant to oxygen 
-    call calcflxo2_sbox()
-endif
-
-! update of zox 
-zoxx = 0d0
-do iz=1,nz
-    if (o2x(iz)<=0d0) exit
-enddo
-
-if (iz==nz+1) then ! oxygen never gets less than 0 
-    zoxx = ztot ! zox is the bottom depth 
-else if (iz==1) then ! calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
-    zoxx = (z(iz)*o2i*1d-6/1d3 + 0d0*abs(o2x(iz)))/(o2i*1d-6/1d3+abs(o2x(iz)))
-else     ! calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
-    zoxx = (z(iz)*o2x(iz-1) + z(iz-1)*abs(o2x(iz)))/(o2x(iz-1)+abs(o2x(iz)))
-endif
-
-error = abs((zox -zoxx)/zox)  ! relative difference 
-#ifdef showiter 
-print*, 'zox',itr,zox, zoxx, error
-#endif
-if (zox==zoxx) exit 
- 
-zox = 0.5d0*(zox + zoxx)  ! new zox 
-
-! if iteration reaches 100 error in zox is tested assuming individual grid depths as zox and find where error gets minimized 
-if (itr>=100 .and. itr <= nz+99) then 
-    zox = z(itr-99) ! zox value in next test 
-    if (minerr >=error ) then ! if this time error is less than last adopt as optimum 
-        if (itr/=100) then 
-            izox_minerr = itr -100
-            minerr = error 
-        endif 
-    endif
-elseif (itr ==nz+100) then ! check last test z(nz)
-    if (minerr >=error ) then 
-        izox_minerr = itr -100
-        minerr = error 
-    endif
-    zox = z(izox_minerr)  ! determine next test which should be most optimum 
-elseif (itr ==nz+101) then  ! results should be optimum and thus exit 
-    exit
-endif 
-
-if (itr >nz+101) then 
-    stop
-endif
-
-itr = itr + 1
-
-enddo 
-
-!~~  O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-do iz = 1,nz 
-    if (o2x(iz) > o2th) then
-        oxco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! aerobic respiration 
-    else 
-        ! o2x(iz) = o2th
-        if (anoxic) then 
-            anco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! anaerobic respiration 
+        if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
+            call o2calc_ox()
+            !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+            call calcflxo2_ox()
+        else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
+            call o2calc_sbox()
+            ! fluxes relevant to oxygen 
+            call calcflxo2_sbox()
         endif
-    endif
-enddo
 
-do iz=1,nz
-    dw(iz) = dw(iz) -(1d0-poro(iz))*mvom*kom(iz)*omx(iz)  !! burial rate change need reflect volume change caused by chemical reactions 
-    ! as well as non-local mixing 
-    if (turbo2(1).or.labs(1)) then 
-        do iiz = 1, nz
-            if (trans(iiz,iz,1)==0d0) cycle
-            dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*omx(iiz))
+        ! update of zox 
+        zoxx = 0d0
+        do iz=1,nz
+            if (o2x(iz)<=0d0) exit
         enddo
-    else 
-        if (nonlocal(1)) then 
+
+        if (iz==nz+1) then ! oxygen never gets less than 0 
+            zoxx = ztot ! zox is the bottom depth 
+        else if (iz==1) then ! calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
+            zoxx = (z(iz)*o2i*1d-6/1d3 + 0d0*abs(o2x(iz)))/(o2i*1d-6/1d3+abs(o2x(iz)))
+        else     ! calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
+            zoxx = (z(iz)*o2x(iz-1) + z(iz-1)*abs(o2x(iz)))/(o2x(iz-1)+abs(o2x(iz)))
+        endif
+
+        error = abs((zox -zoxx)/zox)  ! relative difference 
+#ifdef showiter 
+        print*, 'zox',itr,zox, zoxx, error
+#endif
+        if (zox==zoxx) exit 
+         
+        zox = 0.5d0*(zox + zoxx)  ! new zox 
+
+        ! if iteration reaches 100 error in zox is tested assuming individual grid depths as zox and find where error gets minimized 
+        if (itr>=100 .and. itr <= nz+99) then 
+            zox = z(itr-99) ! zox value in next test 
+            if (minerr >=error ) then ! if this time error is less than last adopt as optimum 
+                if (itr/=100) then 
+                    izox_minerr = itr -100
+                    minerr = error 
+                endif 
+            endif
+        elseif (itr ==nz+100) then ! check last test z(nz)
+            if (minerr >=error ) then 
+                izox_minerr = itr -100
+                minerr = error 
+            endif
+            zox = z(izox_minerr)  ! determine next test which should be most optimum 
+        elseif (itr ==nz+101) then  ! results should be optimum and thus exit 
+            exit
+        endif 
+
+        if (itr >nz+101) then 
+            stop
+        endif
+
+        itr = itr + 1
+
+    enddo 
+
+    !~~  O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    do iz = 1,nz 
+        if (o2x(iz) > o2th) then
+            oxco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! aerobic respiration 
+        else 
+            ! o2x(iz) = o2th
+            if (anoxic) then 
+                anco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! anaerobic respiration 
+            endif
+        endif
+    enddo
+
+    do iz=1,nz
+        dw(iz) = dw(iz) -(1d0-poro(iz))*mvom*kom(iz)*omx(iz)  !! burial rate change need reflect volume change caused by chemical reactions 
+        ! as well as non-local mixing 
+        if (turbo2(1).or.labs(1)) then 
             do iiz = 1, nz
                 if (trans(iiz,iz,1)==0d0) cycle
-                dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*omx(iiz))
+                dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*dz(iiz)*(1d0-poro(iiz))*omx(iiz))
             enddo
+        else 
+            if (nonlocal(1)) then 
+                do iiz = 1, nz
+                    if (trans(iiz,iz,1)==0d0) cycle
+                    dw(iz) = dw(iz) - mvom*(-trans(iiz,iz,1)/dz(iz)*omx(iiz))
+                enddo
+            endif
         endif
-    endif
-enddo
+    enddo
 
-do iz=1,nz
-    if (omx(iz)<omx_th) omx(iz)=omx_th  !! truncated at minimum value 
-enddo
+    do iz=1,nz
+        if (omx(iz)<omx_th) omx(iz)=omx_th  !! truncated at minimum value 
+    enddo
 
 #ifndef nonrec
-if (it==1) write(file_omflx,*)'time, omtflx, omadv, omdec, omdif, omrain, omres'
-write(file_omflx,*)time, omtflx, omadv, omdec, omdif, omrain, omres
-if (it==1) write(file_o2flx,*)'time, o2dec, o2dif, o2tflx, o2res'
-write(file_o2flx,*)time,o2dec, o2dif,o2tflx,o2res
+    if (it==1) write(file_omflx,*)'time, omtflx, omadv, omdec, omdif, omrain, omres'
+    write(file_omflx,*)time, omtflx, omadv, omdec, omdif, omrain, omres
+    if (it==1) write(file_o2flx,*)'time, o2dec, o2dif, o2tflx, o2res'
+    write(file_o2flx,*)time,o2dec, o2dif,o2tflx,o2res
 #endif 
 
-!!  ~~~~~~~~~~~~~~~~~~~~~~ CaCO3 solid, ALK and DIC  calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-call calccaco3sys()
-if (flg_500) go to 500
-! ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
-! update aqueous co2 species 
-call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
-if (infosbr==1) then 
-    dt=dt/10d0
+    !!  ~~~~~~~~~~~~~~~~~~~~~~ CaCO3 solid, ALK and DIC  calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    call calccaco3sys()
+    if (flg_500) go to 500
+    ! ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
+    ! update aqueous co2 species 
+    call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
+    if (infosbr==1) then 
+        dt=dt/10d0
 #ifdef sense
-    go to 500
+        go to 500
 #else
-    stop
+        stop
 #endif 
-endif 
-
-! calculation of fluxes relevant to caco3 and co2 system
-call calcflxcaco3sys()
-
-#ifndef nonrec
-if (it==1) then 
-    write(file_ccflx,*) 'time, cctflx, ccdis, ccdif, ccadv, ccrain, ccres' 
-    write(file_dicflx,*) 'time, dictflx, dicdis, dicdif, dicdec,  dicres' 
-    write(file_alkflx,*) 'time, alktflx, alkdis, alkdif, alkdec, alkres' 
-    do isp=1,nspcc
-        write(file_ccflxes(isp),*) 'time, cctflx, ccdis, ccdif, ccadv, ccrain, ccres' 
-    enddo
-endif
-write(file_ccflx,*) time,sum(cctflx), sum(ccdis), sum(ccdif), sum(ccadv), sum(ccrain), sum(ccres)
-write(file_dicflx,*) time,dictflx, dicdis, dicdif, dicdec,  dicres 
-write(file_alkflx,*) time,alktflx, alkdis, alkdif, alkdec, alkres 
-do isp=1,nspcc
-    write(file_ccflxes(isp),*) time,cctflx(isp), ccdis(isp), ccdif(isp), ccadv(isp), ccrain(isp), ccres(isp)
-enddo
-#endif
-! ~~~~ calculation clay  ~~~~~~~~~~~~~~~~~~
-call claycalc()
-call calcflxclay()
-
-#ifndef nonrec
-if (it==1) write(file_ptflx,*) 'time, pttflx, ptdif, ptadv, ptrain, ptres'
-write(file_ptflx,*) time, pttflx, ptdif, ptadv, ptrain, ptres
-#endif
-!! ~~~~~~~~~End of clay calculation 
-
-err_fx = maxval(abs(frt - 1d0))  ! recording previous error in total vol. fraction of solids 
-do iz=1,nz 
-    rho(iz) = omx(iz)*mom + ptx(iz)*msed +  sum(ccx(iz,:))*mcc  ! calculating bulk density 
-    frt(iz) = omx(Iz)*mvom + ptx(iz)*mvsed + sum(ccx(iz,:))*mvcc  ! calculation of total vol. fraction of solids 
-enddo 
-err_f = maxval(abs(frt - 1d0))  ! new error in total vol. fraction (must be 1 in theory) 
-if (err_f < err_fx) err_f_min = err_f  ! recording minimum error 
-#ifdef sense
-if (err_f < tol) exit  ! if total vol. fraction is near enough to 1, steady-state solution is obtained 
-#endif 
-!! calculation of burial velocity =============================
-
-wx = w  ! recording previous burial velocity 
-
-call burialcalc() ! get new burial velocity
-
-! ------------ determine calculation scheme for advection 
-call calcupwindscheme()
-
-! error and iteration evaluation 
-itr_w = itr_w + 1  ! counting iteration for w 
-err_w = maxval(abs((w-wx)/wx))  ! relative difference of w 
-if (err_w<err_w_min) then 
-    err_w_min= err_w  ! recording minimum relative difference of  w 
-    wxx = wx  ! recording w which minimizes deviation of total sld fraction from 1 
-endif 
-if (itr_w>100) then   ! if iteration gets too many, force to end with optimum w where error is minimum
-    if (itr_w==101) then 
-        w = wxx   
-        go to 300
-    elseif (itr_w==102) then 
-        w = wxx
-        write(file_err,*) 'not converging w',time, err_w, err_w_min
-        go to 400
     endif 
-endif
-if (err_w > tol) go to 300
 
-400 continue
+    ! calculation of fluxes relevant to caco3 and co2 system
+    call calcflxcaco3sys()
 
-!! depth -age conversion 
-call dep2age()
-
-! ---------------------
-! check error for density (rho)
-if (any(rho<0d0)) then  ! if negative density stop ....
-    print*,'negative density'
-    open(unit=file_tmp,file=trim(adjustl(workdir))//'NEGATIVE_RHO.txt',status = 'unknown')
-    do iz = 1, nz
-        write (file_tmp,*) z(iz),rho(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
-    enddo
-    close(file_tmp)
-    stop
-endif 
-
-!/////// ISOTOPES /////
-!  calculating bulk isotopic composition
-do iz=1,nz 
-    d18o_blk(iz) = sum(d18o_sp(:)*ccx(iz,:))/sum(ccx(iz,:))
-    d13c_blk(iz) = sum(d13c_sp(:)*ccx(iz,:))/sum(ccx(iz,:))
-#ifdef size
-    d18o_blkf(iz) = sum(d18o_sp(1:4)*ccx(iz,1:4))/sum(ccx(iz,1:4))
-    d13c_blkf(iz) = sum(d13c_sp(1:4)*ccx(iz,1:4))/sum(ccx(iz,1:4))
-    d18o_blkc(iz) = sum(d18o_sp(5:8)*ccx(iz,5:8))/sum(ccx(iz,5:8))
-    d13c_blkc(iz) = sum(d13c_sp(5:8)*ccx(iz,5:8))/sum(ccx(iz,5:8))
-#endif 
-enddo
-
-!!!!! PRINTING RESULTS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifndef nonrec
-if (time>=rectime(cntrec)) then 
-    call recordprofile(cntrec )
-    
-    cntrec = cntrec + 1
-    if (cntrec == nrec+1) exit
-endif 
-#endif
-
-! displaying results 
-#ifndef nondisp    
-call resdisplay()
-#endif
-
-!! in theory, o2dec/ox2om + alkdec = dicdec = omdec (in absolute value)
-if (om2cc /= 0d0) then 
-    if ( abs((o2dec/ox2om - alkdec + dicdec)/dicdec) > tol) then 
-        print*, abs((o2dec/ox2om + alkdec - dicdec)/dicdec) ,o2dec/ox2om,alkdec,dicdec
-        write(file_err,*) trim(adjustl(dumchr(1))), time, dt &
-            , abs((o2dec/ox2om + alkdec - dicdec)/dicdec),o2dec/ox2om,alkdec,dicdec
+    if (it==1) then 
+        write(file_ccflx,*) 'time, cctflx, ccdis, ccdif, ccadv, ccrain, ccres' 
+        write(file_dicflx,*) 'time, dictflx, dicdis, dicdif, dicdec,  dicres' 
+        write(file_alkflx,*) 'time, alktflx, alkdis, alkdif, alkdec, alkres' 
+        do isp=1,nspcc
+            write(file_ccflxes(isp),*) 'time, cctflx, ccdis, ccdif, ccadv, ccrain, ccres' 
+        enddo
     endif
-endif 
+    write(file_ccflx,*) time,sum(cctflx), sum(ccdis), sum(ccdif), sum(ccadv), sum(ccrain), sum(ccres)
+    write(file_dicflx,*) time,dictflx, dicdis, dicdif, dicdec,  dicres 
+    write(file_alkflx,*) time,alktflx, alkdis, alkdif, alkdec, alkres 
+    do isp=1,nspcc
+        write(file_ccflxes(isp),*) time,cctflx(isp), ccdis(isp), ccdif(isp), ccadv(isp), ccrain(isp), ccres(isp)
+    enddo
+#endif
+    ! ~~~~ calculation clay  ~~~~~~~~~~~~~~~~~~
+    call claycalc()
+    call calcflxclay()
+
+#ifndef nonrec
+    if (it==1) write(file_ptflx,*) 'time, pttflx, ptdif, ptadv, ptrain, ptres'
+    write(file_ptflx,*) time, pttflx, ptdif, ptadv, ptrain, ptres
+#endif
+    !! ~~~~~~~~~End of clay calculation 
+
+    err_fx = maxval(abs(frt - 1d0))  ! recording previous error in total vol. fraction of solids 
+
+    call getsldprop() ! get solid property, rho (density) and frt (total vol.frac)
+
+    err_f = maxval(abs(frt - 1d0))  ! new error in total vol. fraction (must be 1 in theory) 
+    if (err_f < err_fx) err_f_min = err_f  ! recording minimum error 
+#ifdef sense
+    if (err_f < tol) exit  ! if total vol. fraction is near enough to 1, steady-state solution is obtained 
+#endif 
+    !! calculation of burial velocity =============================
+
+    wx = w  ! recording previous burial velocity 
+
+    call burialcalc() ! get new burial velocity
+
+    ! ------------ determine calculation scheme for advection 
+    call calcupwindscheme()
+
+    ! error and iteration evaluation 
+    itr_w = itr_w + 1  ! counting iteration for w 
+    err_w = maxval(abs((w-wx)/wx))  ! relative difference of w 
+    if (err_w<err_w_min) then 
+        err_w_min= err_w  ! recording minimum relative difference of  w 
+        wxx = wx  ! recording w which minimizes deviation of total sld fraction from 1 
+    endif 
+    if (itr_w>100) then   ! if iteration gets too many, force to end with optimum w where error is minimum
+        if (itr_w==101) then 
+            w = wxx   
+            go to 300
+        elseif (itr_w==102) then 
+            w = wxx
+            write(file_err,*) 'not converging w',time, err_w, err_w_min
+            go to 400
+        endif 
+    endif
+    if (err_w > tol) go to 300
+
+    400 continue
+
+    !! depth -age conversion 
+    call dep2age()
+
+    ! ---------------------
+    !/////// ISOTOPES /////
+    !  calculating bulk isotopic composition
+    do iz=1,nz 
+        d18o_blk(iz) = sum(d18o_sp(:)*ccx(iz,:))/sum(ccx(iz,:))
+        d13c_blk(iz) = sum(d13c_sp(:)*ccx(iz,:))/sum(ccx(iz,:))
+#ifdef size
+        d18o_blkf(iz) = sum(d18o_sp(1:4)*ccx(iz,1:4))/sum(ccx(iz,1:4))
+        d13c_blkf(iz) = sum(d13c_sp(1:4)*ccx(iz,1:4))/sum(ccx(iz,1:4))
+        d18o_blkc(iz) = sum(d18o_sp(5:8)*ccx(iz,5:8))/sum(ccx(iz,5:8))
+        d13c_blkc(iz) = sum(d13c_sp(5:8)*ccx(iz,5:8))/sum(ccx(iz,5:8))
+#endif 
+    enddo
+
+    !!!!! PRINTING RESULTS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#ifndef nonrec
+    if (time>=rectime(cntrec)) then 
+        call recordprofile(cntrec )
+        
+        cntrec = cntrec + 1
+        if (cntrec == nrec+1) exit
+    endif 
+#endif
+
+    ! displaying results 
+#ifndef nondisp    
+    call resdisplay()
+#endif
+
+    !! in theory, o2dec/ox2om + alkdec = dicdec = omdec (in absolute value)
+    if (om2cc /= 0d0) then 
+        if ( abs((o2dec/ox2om - alkdec + dicdec)/dicdec) > tol) then 
+            print*, abs((o2dec/ox2om + alkdec - dicdec)/dicdec) ,o2dec/ox2om,alkdec,dicdec
+            write(file_err,*) trim(adjustl(dumchr(1))), time, dt &
+                , abs((o2dec/ox2om + alkdec - dicdec)/dicdec),o2dec/ox2om,alkdec,dicdec
+        endif
+    endif 
 
 #ifndef nonrec 
-write(file_totfrac,*) time,maxval(abs(frt - 1d0))
-call sigrec()  ! recording signals at 3 different depths (btm of mixed layer, 2xdepths of btm of mixed layer and btm depth of calculation domain)
+    write(file_totfrac,*) time,maxval(abs(frt - 1d0))
+    call sigrec()  ! recording signals at 3 different depths (btm of mixed layer, 2xdepths of btm of mixed layer and btm depth of calculation domain)
 #endif 
 
-! before going to next time step, update variables 
+    ! before going to next time step, update variables 
 
-time = time + dt
-it = it + 1
+    time = time + dt
+    it = it + 1
 
-o2 = o2x
-om = omx
+    o2 = o2x
+    om = omx
 
-cc = ccx
-dic = dicx
-alk = alkx
+    cc = ccx
+    dic = dicx
+    alk = alkx
 
-pt = ptx
+    pt = ptx
 
 enddo
 
@@ -1215,7 +1203,7 @@ use globalvariables,only:file_tmp,workdir,dumchr,iz,nz,z,age,pt,msed,wi,rho,cc,c
 implicit none 
 integer(kind=4),intent(in):: itrec
 
-write(dumchr(1),'(i3.3)') itrec  ! recording initial profiles  
+write(dumchr(1),'(i3.3)') itrec  
 
 if (itrec==0) then 
     open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace') 
@@ -1320,7 +1308,7 @@ use globalvariables,only: time_spn,time_trs,time_aft,d13c_ocn,d18o_ocn,d13c_ocni
     ,ccflx,ccflxi,flxfrc,flxfrc2,d18o_sp,d13c_sp,it,nspcc,cntsp,flxfin,flxfini,flxfinf,isp
 implicit none 
 real(kind=8),intent(in)::time
-! if 'sense' is chosen, signal and flux assignments are skipped  
+
 if (time <= time_spn) then   ! spin-up
     d13c_ocn = d13c_ocni  ! take initial values 
     d18o_ocn = d18o_ocni
@@ -1539,20 +1527,6 @@ use globalvariables,only:oxic,anoxic,o2x,o2,o2th,om,omx,zox,izox,kom,komi,nsp,nm
     ,poro
 implicit none 
 
-if (oxic) then 
-    do iz=1,nz
-        if (o2x(iz) > o2th) then
-            kom(iz) = komi
-            izox = iz
-        else! unless anoxi degradation is allowed, om cannot degradate below zox
-            kom(iz) = 0d0
-            if (anoxic) kom(iz) = komi 
-        endif
-    enddo
-endif
-    
-nsp=1 ! number of species considered here; 1, only om 
-nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
 !  amx and ymx correspond to A and B in Ax = B
 !  dgesv subroutine of BLAS returns the solution x in ymx 
 !  emx stores errors (not required for dgesv); ipiv is required for dgesv
@@ -1573,6 +1547,21 @@ nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be 
 !               - B(2) = sporo(2)*(-om(2))/dt
 !
 !  Matrices A and B are filled in this way. Note again amx and ymx correspond A and B, respectively. 
+
+if (oxic) then 
+    do iz=1,nz
+        if (o2x(iz) > o2th) then
+            kom(iz) = komi
+            izox = iz
+        else! unless anoxi degradation is allowed, om cannot degradate below zox
+            kom(iz) = 0d0
+            if (anoxic) kom(iz) = komi 
+        endif
+    enddo
+endif
+    
+nsp=1 ! number of species considered here; 1, only om 
+nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
 if (allocated(amx)) deallocate(amx)
 if (allocated(ymx)) deallocate(ymx)
 if (allocated(emx)) deallocate(emx)
@@ -1942,6 +1931,7 @@ ymx = - ymx  ! change signs
 call dgesv(nmx,int(1),amx,nmx,ipiv,ymx,nmx,infobls) ! solving 
 
 o2x = ymx ! passing solution to variable 
+
 endsubroutine o2calc_sbox
 !**************************************************************************************************************************************
 
@@ -1984,19 +1974,13 @@ use globalvariables,only: error,itr,nsp,nspcc,nmx,nz,amx,ymx,emx,ipiv,dumx,tol,d
     ,ccflx,workdir,ncc,sys,i,j,dt
 implicit none 
 
-flg_500 = .false.
-error = 1d4
-itr = 0
-
-nsp = 2 + nspcc  ! now considered species are dic, alk and nspcc of caco3 
-nmx = nz*nsp  ! col (and row) of matrix; the same number of unknowns 
-!!  HERE the system is non-linear and thus Newton's method is used (e.g., Steefel and Lasaga, 1994): 
+!       Here the system is non-linear and thus Newton's method is used (e.g., Steefel and Lasaga, 1994).
 ! 
 !       Problem: f(x) = 0  (note that x is array, containing N unknowns, here N = nmx)
 !       Expanding around x0 (initial/previous guess), 
 !           f(x) =  f(x0) + f'(x0)*(x-x0) + O((x-x0)**2)  
 !       where f'(x0) represents a Jacobian matrix.
-      ! Solution is sought by iteration 
+!       Solution is sought by iteration 
 !           x = x0 - f'(x0)^-1*f(x0) or x- x0 = - f'(x0)^-1*f(x0)
 !       More practically by following steps. 
 !           (1) solving Ax = B where A = f'(x0) and B = -f(x0), which gives delta (i.e., x - x0) (again these are arrays)
@@ -2023,6 +2007,13 @@ nmx = nz*nsp  ! col (and row) of matrix; the same number of unknowns
 !           ln x = ln x0 + delta, or, x = x0*exp(delta)
 !
 !       See e.g., Steefel and Lasaga (1994) for more details. 
+
+flg_500 = .false.
+error = 1d4
+itr = 0
+
+nsp = 2 + nspcc  ! now considered species are dic, alk and nspcc of caco3 
+nmx = nz*nsp  ! col (and row) of matrix; the same number of unknowns 
 
 deallocate(amx,ymx,emx,ipiv)
 allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
@@ -2858,13 +2849,37 @@ endsubroutine calcflxclay
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
+subroutine getsldprop()
+use globalvariables,only:iz,nz,rho,omx,mom,ptx,msed,ccx,mcc,frt,mvom,mvsed,mvcc,file_tmp,workdir,w,up,dwn,cnr,adf,z
+implicit none 
+
+do iz=1,nz 
+    rho(iz) = omx(iz)*mom + ptx(iz)*msed +  sum(ccx(iz,:))*mcc  ! calculating bulk density 
+    frt(iz) = omx(Iz)*mvom + ptx(iz)*mvsed + sum(ccx(iz,:))*mvcc  ! calculation of total vol. fraction of solids 
+enddo 
+
+! check error for density (rho)
+if (any(rho<0d0)) then  ! if negative density stop ....
+    print*,'negative density'
+    open(unit=file_tmp,file=trim(adjustl(workdir))//'NEGATIVE_RHO.txt',status = 'unknown')
+    do iz = 1, nz
+        write (file_tmp,*) z(iz),rho(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
+    enddo
+    close(file_tmp)
+    stop
+endif 
+
+endsubroutine getsldprop
+!**************************************************************************************************************************************
+
+!**************************************************************************************************************************************
 subroutine burialcalc()
 use globalvariables,only:wi,detflx,msed,mvsed,ccflx,mvcc,omflx,mvom,poroi,iz,nz,w,poroi,dw,dz,poro
 implicit none
 
 ! w is up dated by solving 
 !           d(1 - poro)*w/dz = dw
-! note that dw has recorded volume changes by reactions and non-local mixing  
+! note that dw has recorded volume changes by reactions and non-local mixing (see Eqs. B2 and B6 in ms)
 ! finite difference form is 
 !           if (iz/=1) {(1-poro(iz))*w(iz)-(1-poro(iz-1))*w(iz-1)}/dz(iz) = dw(iz)          
 !           if (iz==1) (1-poro(iz))*w(iz) = total volume flux + dw(iz)*dw(iz)          
@@ -2934,6 +2949,7 @@ subroutine sigrec()
 use globalvariables,only:w,file_sigmly,file_sigmlyd,file_sigbtm,time,age,izrec,d13c_blk,d13c_blkc  &
     ,d13c_blkf,d18o_blk,d18o_blkc,d18o_blkf,ccx,mcc,rho,ptx,msed,izrec2,nz
 implicit none 
+
 #ifndef size 
 if (all(w>=0d0)) then  ! not recording when burial is negative 
     write(file_sigmly,*) time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) &
@@ -2959,6 +2975,7 @@ if (all(w>=0d0)) then  ! not recording when burial is negative
         ,d13c_blkc(nz),d18o_blkc(nz),sum(ccx(nz,5:8))*mcc/rho(nz)*100d0  
 endif 
 #endif
+
 endsubroutine sigrec
 !**************************************************************************************************************************************
 
