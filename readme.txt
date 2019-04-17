@@ -17,6 +17,10 @@ http://qiita.com/AnchorBlues/items/69c1744de818b5e045ab
 5. su
 6. make PREFIX=/usr/local install
 
+If you get the error 'libopenblas.so.0: cannot open shared object file: No such file or directory' then type
+1) sudo apt-get install libopenblas-base
+2) export LD_LIBRARY_PATH=/usr/lib/openblas-base/
+
 See https://github.com/PetterS/SuiteSparse/tree/master/UMFPACK for UMFPACK
 
 Note that UMFPACK is usually not necessary. 
