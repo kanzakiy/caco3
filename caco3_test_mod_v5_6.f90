@@ -2,7 +2,7 @@
 
 !**************************************************************************************************************************************
 module globalvariables
-
+! Module to define variables 
 implicit none
 #include <defines.h>
 integer(kind=4),parameter :: nz = 100  ! grid number 
@@ -38,8 +38,11 @@ real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary
 ! real(kind=8) :: komi = 0.1d0  ! /yr  ! Canfield 1994
 ! real(kind=8) :: komi = 0.06d0  ! /yr  ! ?? Emerson 1985? who adopted relatively slow decomposition rate 
 ! real(kind=8) :: kcci = 10.0d0*365.25d0  ! /yr; a reference caco3 dissolution rate const. 
+#ifndef nodissolve
 real(kind=8) :: kcci = 1d0*365.25d0  ! /yr  ;cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
-! real(kind=8) :: kcci = 0d0*365.25d0  ! /yr 
+#else
+real(kind=8) :: kcci = 0d0*365.25d0  ! /yr 
+#endif 
 real(kind=8) :: poroi = 0.8d0  ! a reference porosity 
 real(kind=8) :: keqcc = 4.4d-7   ! mol2 kg-2 caco3 solutiblity (Mucci 1983 cited by Emerson and Archer 1990)
 real(kind=8) :: ncc = 4.5d0   ! (Archer et al. 1989) reaction order for caco3 dissolution 
@@ -206,15 +209,18 @@ program caco3
 ! separate into subroutines
 !====================================
 ! cpp options (see also defines.h)
-! sense    :  not doing any signal change experiments, used for lysocline and CaCO3 burial calculations 
-! biotest  :  examining different styles of biotubation 
-! track2   :  tracking signals with multipe CaCO3 species at different time steps
-! size     :  two types of CaCO3 species with different sizes 
-! nonrec   :  not storing the profile files but only CaCO3 conc. and burial flux at the end of simulation 
-! nondisp  :  not displaying the results 
-! showiter :  showing each iteration on display 
-! sparse   :  use sparse matrix solver for caco3 and co2 system 
-! recgrid  :  recording the grid to be used for making transition matrix in LABS 
+! sense     :  not doing any signal change experiments, used for lysocline and CaCO3 burial calculations 
+! biotest   :  examining different styles of biotubation 
+! track2    :  tracking signals with multipe CaCO3 species at different time steps
+! size      :  two types of CaCO3 species with different sizes 
+! nonrec    :  not storing the profile files but only CaCO3 conc. and burial flux at the end of simulation 
+! nondisp   :  not displaying the results 
+! showiter  :  showing each iteration on display 
+! sparse    :  use sparse matrix solver for caco3 and co2 system 
+! recgrid   :  recording the grid to be used for making transition matrix in LABS 
+! allnobio  :  assuming no bioturbation for all caco3 species 
+! allturbo2 :  assuming homogeneous bio-mixing for all caco3 species
+! alllabs   :  assuming non-local mixing from LABS for all caco3 species
 ! ===================================
 use globalvariables 
 implicit none 
@@ -233,7 +239,7 @@ anoxic = .false.
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)  ! get date and time in character 
 
 !!! get variables !!!
-call getinput()
+call getinput() ! get total caco3 flux, om/caco3 rain ratio and water depth   
 print'(3A,3E11.3)','ccflxi','om2cc','dep:',ccflxi,om2cc, dep  ! printing read data 
 
 #ifndef nonrec
@@ -244,15 +250,15 @@ call makeprofdir()
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!  MAKING GRID !!!!!!!!!!!!!!!!! 
-beta = 1.00000000005d0
+beta = 1.00000000005d0  ! a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
 call makegrid(beta,nz,ztot,dz,z)
 ! stop
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!! FUNDAMENTAL PARAMETERS !!!!!!!!!!!!!
-call flxstat() ! assume steady state flux 
+call flxstat() ! assume steady state flux for detrital material 
 
-! molar volume (cm3/mol) = molar mass (g/mol) / density (g/cm3)
+! calculate molar volume (cm3/mol) = molar mass (g/mol) / density (g/cm3)
 mvom = mom/rhoom  ! om
 mvsed = msed/rhosed ! clay 
 mvcc = mcc/rhocc ! caco3
@@ -477,7 +483,7 @@ do
 
     enddo 
 
-    !~~  O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    !~~  OM & O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     do iz = 1,nz 
         if (o2x(iz) > o2th) then
@@ -865,6 +871,7 @@ implicit none
 ! burial rate w from rain fluxes represented by volumes
 ! initial guess assuming a box representation (this guess is accurate when there is no caco3 dissolution occurring) 
 ! om is not considered as it gets totally depleted 
+
 wi = (detflx/msed*mvsed + sum(ccflx)*mvcc            )/(1d0-poroi)
 w = wi
 
@@ -899,6 +906,7 @@ implicit none
 !  when burial rate is positive, scheme need to choose up, i.e., up = 1.  
 !  when burial rate is negative, scheme need to choose dwn, i.e., dwn = 1.  
 !  where burial change from positive to negative or vice versa, scheme chooses cnr, i.e., cnr = 1. for the mass balance sake 
+
 up = 0
 dwn=0
 cnr =0
@@ -2882,7 +2890,7 @@ implicit none
 ! note that dw has recorded volume changes by reactions and non-local mixing (see Eqs. B2 and B6 in ms)
 ! finite difference form is 
 !           if (iz/=1) {(1-poro(iz))*w(iz)-(1-poro(iz-1))*w(iz-1)}/dz(iz) = dw(iz)          
-!           if (iz==1) (1-poro(iz))*w(iz) = total volume flux + dw(iz)*dw(iz)          
+!           if (iz==1) (1-poro(iz))*w(iz) = total volume flux + dw(iz)*dz(iz)          
 ! which leads to the following calculations 
 
 wi = (detflx/msed*mvsed + sum(ccflx)*mvcc +omflx*mvom)/(1d0-poroi)  ! upper value; (1d0-poroi) is almost meaningless, see below 
