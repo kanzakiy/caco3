@@ -2,6 +2,7 @@ Memo
 
 CaCO3 therdomynamic subroutines & functions in caco3_therm.f90 
 Main code caco3_test_mod_v5_5.f90
+caco3_test_mod_v5_6.f90 works as well consisting of lots of subroutines 
 
 Need BLAS (& UMFPACK if the number of CaCO3 species is large) libraries 
 
@@ -27,8 +28,7 @@ Simulation can be run by following steps:
     [if you do not have UMFPACK]
     'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o -lopenblas -g -fcheck=all'
     [if you have UMFPACK] 
-    'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o 
-    -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
+    'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
 (d) run by './a.exe cc caco3_rainflux_value rr om/caco3_rain_ratio_value dep water_depth_value dt time_step_value fl simulation_name'
     where caco3_rainflux_value [umol cm2 yr-1], om/caco3_rain_ratio_value, water_depth_value [km], time_step_value [yr] and simulation_name are your inputs. 
     The water_depth_value [km] represents water depth when simulation does not track proxy signals ('sense' macro is defined in defines.h), and 
