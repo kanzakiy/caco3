@@ -6,12 +6,17 @@ program chk_om
 ! (3) gfortran -cpp -I/path/to/working/directory chk_om.f90 caco3_test_mod_v5_6.o caco3_therm.o -lopenblas -g -fcheck=all
 ! (4) ./a.out
 
-! you can om calculation including om conc. and flx 
+! you can check om calculation including om conc. and flx 
 ! please copy and paste results to whatever file to be compared with results with MATLAB version 
 ! NOTE: here oxygen conc. has to be assume. The model calculate om and o2 iteratively, but not here. 
 
 use globalvariables
 implicit none 
+integer(kind=4) interval  ! choose value between 1 to nz 
+
+interval =10 ! choose a value between 1 to nz; om depth profile is shown with this interval; e.g., if inteval = nz, om conc. at all depths are shown
+! e.g., if interval = 5, om conc. at 5 depths are shown   
+
 #include <defines.h>
 
 #ifdef allnobio 
@@ -53,10 +58,12 @@ do it=1,nt
     ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
     call calcflxom()
     
+    write(dumchr(2),'(i0)') interval
+    dumchr(1)="(A,"//trim(adjustl(dumchr(2)))//"E11.3"//")"
     ! showing results on screen
     print*,'~~~~ conc ~~~~'
-    print'(A,5E11.3)', 'z  :',(z(iz),iz=1,nz,nz/5)
-    print'(A,5E11.3)', 'om :',(omx(iz)*mom/rho(iz)*100d0,iz=1,nz,nz/5)
+    print dumchr(1), 'z  :',(z(iz),iz=1,nz,nz/interval)
+    print dumchr(1), 'om :',(omx(iz)*mom/rho(iz)*100d0,iz=1,nz,nz/interval)
     print*,'++++ flx ++++'
     print'(7A11)', 'tflx','adv','dif','omrxn','ccrxn','rain','res'
     print'(A,7E11.3)', 'om :', omtflx, omadv,  omdif, omdec,0d0,omrain, omres
