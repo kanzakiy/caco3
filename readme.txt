@@ -30,9 +30,21 @@ Simulation can be run by following steps:
 (b) comment/comment out macros in defines.h 
 (c) compile by typing: 
     [if you do not have UMFPACK]
-    'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o -lopenblas -g -fcheck=all'
+        [if you use v5_5.f90]
+            i)   gfortran -c caco3_therm.f90
+            ii)  gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o -lopenblas -g -fcheck=all
+        [if you use v_5_6.f90]
+            i)   gfortran -c caco3_therm.f90
+            ii)  gfortran -c -cpp -I/path/to/working/directory_test_mod_v5_6.f90
+            iii) gfortran chk_sbrtns.f90 caco3_test_mod_v5_6.o caco3_therm.o -lopenblas -g -fcheck=all
     [if you have UMFPACK] 
-    'gfortran -c caco3_therm.f90; gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all'
+        [if you use v5_5.f90]
+            i)   gfortran -c caco3_therm.f90
+            ii)  gfortran -cpp -I/path/to/working/directory caco3_test_mod_v5_5.f90 caco3_therm.o umf4_f77wrapper.o -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all
+        [if you use v_5_6.f90]
+            i)   gfortran -c caco3_therm.f90
+            ii)  gfortran -c -cpp -I/path/to/working/directory_test_mod_v5_6.f90
+            iii) gfortran chk_sbrtns.f90 caco3_test_mod_v5_6.o caco3_therm.o umf4_f77wrapper.o -lumfpack -lamd -lcholmod -lcolamd -lsuitesparseconfig -lopenblas -g -fcheck=all
 (d) run by './a.exe cc caco3_rainflux_value rr om/caco3_rain_ratio_value dep water_depth_value dt time_step_value fl simulation_name'
     where caco3_rainflux_value [umol cm2 yr-1], om/caco3_rain_ratio_value, water_depth_value [km], time_step_value [yr] and simulation_name are your inputs. 
     The water_depth_value [km] represents water depth when simulation does not track proxy signals ('sense' macro is defined in defines.h), and 
