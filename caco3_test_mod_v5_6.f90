@@ -203,7 +203,8 @@ endmodule globalvariables
 
 
 !**************************************************************************************************************************************
-program caco3 
+! program caco3 
+subroutine caco3() 
 ! trying a simple diagenesis
 ! irregular grid
 ! separate into subroutines
@@ -684,7 +685,8 @@ call closefiles()
 
 call resrec()  ! recording end results for lysoclines and caco3 burial fluxes
 
-end program 
+! end program 
+endsubroutine caco3
 !**************************************************************************************************************************************
 
 
