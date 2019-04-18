@@ -135,7 +135,7 @@ real(kind=8) :: trans(nz,nz,nspcc+2)  ! transition matrix
 real(kind=8) :: transdbio(nz,nz), translabs(nz,nz) ! transition matrices created assuming Fickian mixing and LABS simulation
 real(kind=8) :: transturbo2(nz,nz), translabs_tmp(nz,nz) ! transition matrices assuming random mixing and LABS simulation 
 character*512 workdir, filechr  ! work directory and created file names 
-character*10 dumchr(3)  ! character dummy variables 
+character*25 dumchr(3)  ! character dummy variables 
 character*25 arg, chr(3,4)  ! used for reading variables and dummy variables
 integer(kind=4) dumint(8)  ! dummy integer 
 integer(kind=4) idp, izox  ! integer for depth and grid number of zox 
