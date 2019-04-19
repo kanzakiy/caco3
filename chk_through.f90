@@ -72,11 +72,11 @@ o2x = o2
 ccx = cc
 dicx = dic
 alkx = alk 
+ptx = pt
 ! this may not be necessary as these individual species assume equilibrium 
 co2x = co2
 hco3x = hco3
 co3x = co3
-ptx = pt
 
 time = 0d0 ! model time [yr]
 it = 1 ! integration count 
@@ -85,8 +85,8 @@ dt = 1d2 ! time step [yr]
 
 rho = 2.5d0 ! assume here 
 
-oxco2 = 0d0  ! oxic degradation of om; here assumed 0 at all time and depth  
-anco2 = 0d0  ! anoxic degradation of om; here assumed 0 at all time and depth  
+oxco2 = 0d0  ! oxic degradation of om; here initially assumed 0   
+anco2 = 0d0  ! anoxic degradation of om; here initially assumed 0   
 !!!  addition to chk_om.f90 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 zox = 10d0  ! initial assumption on oxygen penetaration depth [cm]
 !!! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
