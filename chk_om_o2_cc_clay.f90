@@ -276,6 +276,7 @@ do it=1,nt
     cc = ccx
     dic = dicx
     alk = alkx
+    pt = ptx
     time = time +dt
     
 enddo
