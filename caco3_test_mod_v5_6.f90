@@ -1536,6 +1536,7 @@ use globalvariables,only:oxic,anoxic,o2x,o2,o2th,om,omx,zox,izox,kom,komi,nsp,nm
     ,sporo,sporoi,sporof,w,wi,dw,dt,row,col,iiz,up,dwn,cnr,adf,trans,turbo2,labs,nonlocal,infobls,dz,omflx &
     ,poro
 implicit none 
+logical izox_calc_done
 
 !  amx and ymx correspond to A and B in Ax = B
 !  dgesv subroutine of BLAS returns the solution x in ymx 
@@ -1558,14 +1559,17 @@ implicit none
 !
 !  Matrices A and B are filled in this way. Note again amx and ymx correspond A and B, respectively. 
 
+izox_calc_done = .false.
 if (oxic) then 
     do iz=1,nz
         if (o2x(iz) > o2th) then
             kom(iz) = komi
-            izox = iz
+            ! izox = iz
+            if (.not. izox_calc_done) izox = iz
         else! unless anoxi degradation is allowed, om cannot degradate below zox
             kom(iz) = 0d0
-            if (anoxic) kom(iz) = komi 
+            if (anoxic) kom(iz) = komi
+            izox_calc_done = .true.
         endif
     enddo
 endif
@@ -2025,7 +2029,11 @@ itr = 0
 nsp = 2 + nspcc  ! now considered species are dic, alk and nspcc of caco3 
 nmx = nz*nsp  ! col (and row) of matrix; the same number of unknowns 
 
-deallocate(amx,ymx,emx,ipiv)
+! deallocate(amx,ymx,emx,ipiv)
+if (allocated(amx))deallocate(amx)
+if (allocated(ymx))deallocate(ymx)
+if (allocated(emx))deallocate(emx)
+if (allocated(ipiv))deallocate(ipiv)
 allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
 
 if (allocated(dumx))deallocate(dumx)  ! used for sparse matrix solver 
@@ -2681,7 +2689,11 @@ itr = 0
 
 nsp = 1 !  only consider clay
 nmx = nz*nsp  ! matrix is linear and solved like om and o2, so see comments there for calculation procedures 
-deallocate(amx,ymx,emx,ipiv)
+if (allocated(amx))deallocate(amx)
+if (allocated(ymx))deallocate(ymx)
+if (allocated(emx))deallocate(emx)
+if (allocated(ipiv))deallocate(ipiv)
+! deallocate(amx,ymx,emx,ipiv)
 allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
     
 amx = 0d0
