@@ -108,14 +108,14 @@ do it=1,nt
     ! showing results on screen
     print*,'~~~~ conc ~~~~'
     print dumchr(1), 'z  :',(z(iz),iz=1,nz,nz/interval)
-    print dumchr(1), 'cc :',(sum(ccx(iz,:)*mcc)/rho(iz)*100d0,iz=1,nz,nz/5)
-    print dumchr(1), 'dic:',(dicx(iz)*1d3,iz=1,nz,nz/5)
-    print dumchr(1), 'alk:',(alkx(iz)*1d3,iz=1,nz,nz/5)
+    print dumchr(1), 'cc :',(sum(ccx(iz,:)*mcc)/rho(iz)*100d0,iz=1,nz,nz/interval)
+    print dumchr(1), 'dic:',(dicx(iz)*1d3,iz=1,nz,nz/interval)
+    print dumchr(1), 'alk:',(alkx(iz)*1d3,iz=1,nz,nz/interval)
     print*, '   ..... multiple cc species ..... '
     write(dumchr(2),'(i0)') interval
     dumchr(1)="(i0.3,':',"//trim(adjustl(dumchr(2)))//"E11.3"//")"
     do isp=1,nspcc 
-        print dumchr(1),isp,(ccx(iz,isp)*mcc/rho(iz)*100d0,iz=1,nz,nz/5)
+        print dumchr(1),isp,(ccx(iz,isp)*mcc/rho(iz)*100d0,iz=1,nz,nz/interval)
     enddo
     print*,'++++ flx ++++'
     print'(7A11)', 'tflx','adv','dif','omrxn','ccrxn','rain','res'
