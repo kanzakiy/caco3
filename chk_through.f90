@@ -11,7 +11,7 @@ program chk_through
 
 ! you can check calculation of concs. and flxes of om, o2, cc & clay, with burial modified at individual time steps 
 ! please copy and paste results to whatever file to be compared with results with MATLAB version 
-! NOTE: Burial is not modified according to reactions and non-local mixing so that solid conc. may go above 100 wt %.  
+! NOTE: Now this code is almost the same as the whole code. The difference is only that this code does not track any signals   
 
 #include <defines.h>
 use globalvariables
