@@ -40,6 +40,18 @@ call makegrid(beta,nz,ztot,dz,z)
 
 call getporosity() ! assume porosity profile 
 
+!!!!!!!!!!!!! flx assignement and initial guess for burial rate !!!!!!!!!!!!!!!!!!!!!!
+call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+! print*,om2cc,ccflxi,detflx,omflx,sum(ccflx)
+! molar volume (cm3 mol-1) needed for burial rate calculation 
+mvom = mom/rhoom  ! om
+mvsed = msed/rhosed ! clay 
+mvcc = mcc/rhocc ! caco3
+call burial_pre() ! initial guess of burial profile, requiring porosity profile  
+call dep2age() ! depth -age conversion 
+call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 call make_transmx()
 
 call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
