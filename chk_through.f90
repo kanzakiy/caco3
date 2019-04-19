@@ -81,7 +81,7 @@ ptx = pt
 time = 0d0 ! model time [yr]
 it = 1 ! integration count 
 nt = 10 ! total integration 
-dt = 100d0 ! time step [yr]
+dt = 1d2 ! time step [yr]
 
 rho = 2.5d0 ! assume here 
 
@@ -282,7 +282,8 @@ do it=1,nt
     if (err_w > tol) go to 300
 
 400 continue
-    
+
+    print'(A,E11.3)', 'error in frt:', maxval(abs(frt - 1d0))
     ! showing results on screen
     write(dumchr(2),'(i0)') interval
     dumchr(1)="(A,"//trim(adjustl(dumchr(2)))//"E11.3"//")"
