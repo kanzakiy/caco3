@@ -58,11 +58,6 @@ call make_transmx()
 
 call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
 
-! assume rain flux of cc 
-ccflx = ccflxi/nspcc  ! equally distributing total ccflx (defined as ccflxi) between caco3 species (nspcc) 
-
-! assume boundary conditions 
-
 !!   INITIAL CONDITIONS !!!!!!!!!!!!!!!!!!! 
 cc = 1d-8   ! assume an arbitrary low conc. 
 dic = dici*1d-6/1d3 ! mol/cm3; factor is added to change uM to mol/cm3 
