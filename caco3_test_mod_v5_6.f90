@@ -30,8 +30,13 @@ real(kind=8) flxfrc(nspcc),flxfrc2(nspcc)  ! flux fractions used for assigning f
 real(kind=8) :: ccflxi = 10d-6 ! mol (CaCO3) cm-2 yr-1  ! a reference caco3 flux; Emerson and Archer (1990) 
 real(kind=8) :: omflx = 12d-6 ! mol cm-2 yr-1       ! a reference om flux; Emerson and Archer (1990)
 real(kind=8) :: detflx = 180d-6 ! g cm-2 yr-1  ! a reference detrital flux; MUDS input http://forecast.uchicago.edu/Projects/muds.html
+#ifndef mocsy
 real(kind=8) :: alki =  2285d0 ! uM  ! a reference ALK; MUDS
 real(kind=8) :: dici = 2211d0 ! uM   ! a reference DIC; MUDS 
+#else 
+real(kind=8) :: alki =  2295d0 ! uM  ! a reference ALK from mocsy
+real(kind=8) :: dici = 2154d0 ! uM   ! a reference DIC from mocsy 
+#endif 
 real(kind=8) :: o2i = 165d0 ! uM     ! a reference O2 ; MUDS
 ! real(kind=8) :: komi = 2d0  ! /yr  ! a reference om degradation rate const.; MUDS 
 real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary 
@@ -82,11 +87,12 @@ real(kind=8) dif_dic(nz), dif_alk(nz), dif_o2(nz) ! dic, alk and o2 diffusion co
 real(kind=8) dbio(nz), ff(nz)  ! biodiffusion coeffs, and formation factor 
 real(kind=8) co2(nz), hco3(nz), co3(nz), pro(nz) ! co2, hco3, co3 and h+ concs. 
 real(kind=8) co2x(nz), hco3x(nz), co3x(nz), prox(nz),co3i  ! dummy variables and initial co3 conc.  
+real(kind=8) omega(nz),domega_ddic(nz),domega_dalk(nz)
 real(kind=8) poro(nz), rho(nz), frt(nz)  ! porositiy, bulk density and total volume fraction of solid materials 
 real(Kind=8) sporo(nz), sporoi, porof, sporof  ! solid volume fraction (1 - poro), i and f denote the top and bottom values of variables  
 real(kind=8) rcc(nz,nspcc)  ! dissolution rate of caco3 
 real(kind=8) drcc_dcc(nz,nspcc), drcc_ddic(nz,nspcc)! derivatives of caco3 dissolution rate wrt caco3 and dic concs.
-real(kind=8) drcc_dalk(nz,nspcc), drcc_dco3(nz,nspcc) ! derivatives of caco3 dissolution rate wrt alk and co3 concs.
+real(kind=8) drcc_dalk(nz,nspcc), drcc_dco3(nz,nspcc),drcc_domega(nz,nspcc) ! derivatives of caco3 dissolution rate wrt alk and co3 concs.
 real(kind=8) dco3_ddic(nz), dco3_dalk(nz)  ! derivatives of co3 conc. wrt dic and alk concs. 
 real(kind=8) ddum(nz)  ! dummy variable 
 real(kind=8) dpro_dalk(nz), dpro_ddic(nz)  ! derivatives of h+ conc. wrt alk and dic concs. 
@@ -307,8 +313,15 @@ dic = dici*1d-6/1d3 ! mol/cm3; factor is added to change uM to mol/cm3
 alk = alki*1d-6/1d3 ! mol/cm3
 
 ! call subroutine to calculate all aqueous co2 species reflecting initial assumption on dic and alk 
+#ifndef mocsy
 call calcspecies(dic,alk,temp,sal,dep,pro,co2,hco3,co3,nz,infosbr)  
-    
+#else
+call co2sys_mocsy(nz,alk*1d6,dic*1d6,temp,dep*1d3,sal  &
+                        ,co2,hco3,co3,pro,omega,domega_ddic,domega_dalk) ! using mocsy
+co2 = co2/1d6
+hco3 = hco3/1d6
+co3 = co3/1d6
+#endif     
 pt = 1d-8  ! assume an arbitrary low conc. 
 om = 1d-8  ! assume an arbitrary low conc. 
 o2 = o2i*1d-6/1d3 ! mol/cm3  ; factor is added to change uM to mol/cm3 
@@ -323,6 +336,10 @@ hco3x = hco3
 co3x = co3
 
 co3i=co3(1) ! recording seawater conc. of co3 
+#ifdef mocsy 
+cai = (0.02128d0/40.078d0) * sal/1.80655d0
+co3sat = co3i*1d3/omega(1)
+#endif  
 
 ptx = pt
 
@@ -531,6 +548,7 @@ do
     if (flg_500) go to 500
     ! ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
     ! update aqueous co2 species 
+#ifndef mocsy
     call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
     if (infosbr==1) then 
         dt=dt/10d0
@@ -540,6 +558,13 @@ do
         stop
 #endif 
     endif 
+#else 
+    call co2sys_mocsy(nz,alkx*1d6,dicx*1d6,temp,dep*1d3,sal  &
+                            ,co2x,hco3x,co3x,prox,omega,domega_ddic,domega_dalk) ! using mocsy
+    co2x = co2x/1d6
+    hco3x = hco3x/1d6
+    co3x = co3x/1d6
+#endif 
 
     ! calculation of fluxes relevant to caco3 and co2 system
     call calcflxcaco3sys()
@@ -833,8 +858,17 @@ endsubroutine makeprofdir
 
 !**************************************************************************************************************************************
 subroutine flxstat()  ! determine steady state flux 
-use globalvariables, only: omflx,detflx,ccflx,om2cc,ccflxi,ccflxi,mcc,ccflxi,nspcc
+use globalvariables, only: omflx,detflx,ccflx,om2cc,ccflxi,mcc,nspcc
 implicit none
+
+! subroutine flxstat(  &
+!     omflx,deflx,ccflx  & ! output
+!     ,om2cc,ccflxi,mcc,nspcc  & ! input 
+!     )
+! implicit none 
+! integer(kind=4),intent(in)::nspcc
+! real(kind=8),intent(in)::om2cc,ccflxi,mcc
+! real(kind=8),intent(out)::omflx,detflx,ccflx(nspcc)
 
 omflx = om2cc*ccflxi  ! om rain = rain ratio x caco3 rain 
 detflx = (1d0/9d0)*ccflxi*mcc ! 90% of mass flux becomes inorganic C; g cm-2 yr-1
@@ -847,6 +881,18 @@ endsubroutine flxstat
 subroutine getporosity()
 use globalvariables, only: poro,poroi,calgg,pore_max,exp_pore,z,porof,sporo,sporof,sporoi,nz 
 implicit none 
+
+! subroutine getporosity(  &
+!      poro,porof,sporo,sporof,sporoi & ! output
+!      ,z,nz  & ! input
+!      )
+! use globalvariables,only:poroi
+! implicit none
+! integer(kind=4),intent(in)::nz
+! real(kind=8),dimension(nz),intent(in)::z
+! real(kind=8),dimension(nz),intent(out)::poro,sporo
+! real(kind=8),intent(out)::porof,sporoi,sporof
+! real(kind=8) calgg,pore_max,exp_pore
 
 poro = poroi  ! constant porosity 
 ! ----------- Archer's parameterization 
@@ -870,6 +916,15 @@ subroutine burial_pre()
 use globalvariables, only: w,wi,detflx,msed,mvsed,ccflx,mvcc,poroi
 implicit none
 
+! subroutine burial_pre(  &
+!     w,wi  & ! output
+!     ,detflx,ccflx,msed,mvsed,mvcc,nspcc  ! input &
+!     )
+! use globalvariables, only: poroi
+! implicit none
+! integer(kind=4),intent(in)::nspcc
+! real(kind=8),intent(in)::detflx,ccflx,msed,mvsed,mvcc 
+
 ! burial rate w from rain fluxes represented by volumes
 ! initial guess assuming a box representation (this guess is accurate when there is no caco3 dissolution occurring) 
 ! om is not considered as it gets totally depleted 
@@ -885,6 +940,16 @@ subroutine dep2age()
 use globalvariables,only:dage,dz,w,age,iz,nz
 implicit none 
 
+! dep2age(age, &  ! output 
+!   (dz,w,nz  &  ! input
+!    )
+! implicit none
+! integer(kind=4),intent(in)::nz
+! real(kind=8),intent(in)::dz(nz),w(nz)
+! real(kind=8),intent(out)::age(nz)
+! real(kind=8)::dage(nz)
+! integer(kind=4) iz
+
 dage = dz/w  ! time spans of individual sediment layers 
 age = 0d0
 do iz=1,nz  ! assigning ages to depth in the same way to assign depths to individual grids 
@@ -899,6 +964,18 @@ endsubroutine dep2age
 subroutine calcupwindscheme()
 use globalvariables,only: up,dwn,cnr,adf,iz,nz,w,corrf
 implicit none 
+
+! calcupwindscheme(  &
+!     up,dwn,cnr,adf & ! output 
+!     ,w,nz   & ! input &
+!     )
+! implicit none
+! integer(kind=4),intent(in)::nz
+! real(kind=8),intent(in)::w(nz)
+! real(kind=8),dimension(nz),intent(out)::up,dwn,cnr,adf
+! real(kind=8) corrf
+! integer(kind=4) iz
+
 
 ! ------------ determine variables to realize advection 
 !  upwind scheme 
@@ -989,6 +1066,18 @@ endsubroutine calcupwindscheme
 subroutine recordtime()
 use globalvariables,only:rectime,time_spn,ztot,wi,time_trs,time_aft,itrec,nrec,cntrec,file_tmp,workdir
 implicit none 
+
+! subroutine recordtime(  &
+!     rectime,cntrec  & ! output
+!     ,nrec, time_spn,wi,time_trs,time_aft  & ! input
+!     )
+! use globalvariables,only:ztot,file_tmp,workdir
+! implicit none 
+! integer(kind=4),intent(in)::nrec
+! real(kind=8),intent(in)::time_spn,time_trs,time_aft
+! real(kind=8),intent(out)::rectime,
+! integer(kind=4),intent(out)::cntrec
+! integer(kind=4) itrec
  
 !!! +++ tracing experiment 
 time_spn = ztot / wi *50d0 ! yr  ! spin-up duration, 50 times the shortest residence time possible (assuming no caco3 dissolution) 
@@ -1069,6 +1158,23 @@ use globalvariables, only:labs,translabs,nlabs,ilabs,translabs_tmp,dumchr,file_t
     ,zrec,zrec2,iz,nz,z,izrec,izrec2,nonlocal,isp,nspcc,turbo2,dbio,izml,transdbio,transturbo2  &
     ,trans,nobio,dz,sporo  
 implicit none 
+
+! subroutine make_transmx(  &
+!     trans,izrec,izrec2,izml,nonlocal  & ! output 
+!     ,labs,nspcc,turbo2,nobio,dz,sporo,nz,nspcc,z  & ! input
+!     )
+! use globalvariables,only:file_tmp,zml_ref
+! implicit none
+! integer(kind=4),intent(in)::nspcc,nz
+! real(kind=8),intent(in)::dz(nz),sporo(nz),z(nz)
+! logical,intent(in)::labs(nspcc+2),turbo2(nspcc+2),nobio(nspcc+2)
+! real(kind=8),intent(out)::trans(nz,nz,nspcc+2)
+! logical,intent(out)::nonlocal(nspcc+2)
+! integer(kind=4),intent(out)::izrec,izrec2,izml
+! integer(kind=4) nlabs,ilabs,iz,isp
+! real(kind=8) :: translabs(nz,nz),translabs_tmp(nz,nz),dbio(nz),transdbio(nz,nz),transturbo2(nz,nz)
+! real(kind=8) :: zml,zrec,zrec2
+! character*25 dumchr(3)
 
 !~~~~~~~~~~~~ loading transition matrix from LABS ~~~~~~~~~~~~~~~~~~~~~~~~
 if (any(labs)) then
@@ -1985,7 +2091,7 @@ use globalvariables,only: error,itr,nsp,nspcc,nmx,nz,amx,ymx,emx,ipiv,dumx,tol,d
     ,infosbr,sal,temp,dco3_ddic,dco3_dalk,rcc,drcc_dcc,drcc_dco3,drcc_ddic,isp,iz,row,col,sporo,sporoi,sporof,poro,poroi  &
     ,flg_500,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,trans,iiz,cc,ccx,dic,dicx,alk,alkx,labs,turbo2,nonlocal,fact,n,nnz,ap,ai &
     ,ax,file_tmp,oxco2,anco2,infobls,kai,bx,cnt2,cnt,symbolic,control,info,numeric,alki,dici,co3sat,ccx_th,kcc,drcc_dalk  &
-    ,ccflx,workdir,ncc,sys,i,j,dt
+    ,ccflx,workdir,ncc,sys,i,j,dt,omega,domega_ddic,domega_dalk,drcc_domega
 implicit none 
 
 !       Here the system is non-linear and thus Newton's method is used (e.g., Steefel and Lasaga, 1994).
@@ -2045,6 +2151,7 @@ amx = 0d0
 ymx = 0d0
 
 ! calling subroutine from caco3_therm.f90 to calculate aqueous co2 species 
+#ifndef mocsy
 call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
 if (infosbr==1) then ! which means error in calculation 
     dt=dt/10d0
@@ -2078,6 +2185,25 @@ do isp=1,nspcc
     drcc_ddic(:,isp) = drcc_dco3(:,isp)*dco3_ddic(:)
     drcc_dalk(:,isp) = drcc_dco3(:,isp)*dco3_dalk(:)
 enddo
+#else
+call co2sys_mocsy(nz,alkx*1d6,dicx*1d6,temp,dep*1d3,sal  &
+                        ,co2x,hco3x,co3x,prox,omega,domega_ddic,domega_dalk) ! using mocsy
+co2x = co2x/1d6
+hco3x = hco3x/1d6
+co3x = co3x/1d6
+domega_ddic = domega_ddic*1d6
+domega_dalk = domega_dalk*1d6
+do isp=1,nspcc
+    ! calculation of dissolution rate for individual species 
+    rcc(:,isp) = kcc(:,isp)*ccx(:,isp)*abs(1d0-omega(:))**ncc*merge(1d0,0d0,(1d0-omega(:))>0d0)
+    ! calculation of derivatives of dissolution rate wrt conc. of caco3 species, dic and alk 
+    drcc_dcc(:,isp) = kcc(:,isp)*abs(1d0-omega(:))**ncc*merge(1d0,0d0,(1d0-omega(:))>0d0)
+    drcc_domega(:,isp) = kcc(:,isp)*ccx(:,isp)*ncc*abs(1d0-omega(:))**(ncc-1d0)  &
+        *merge(1d0,0d0,(1d0-omega(:))>0d0)*(-1d0)
+    drcc_ddic(:,isp) = drcc_domega(:,isp)*domega_ddic(:)
+    drcc_dalk(:,isp) = drcc_domega(:,isp)*domega_dalk(:)
+enddo
+#endif 
 
 do iz = 1,nz 
     row = 1 + (iz-1)*nsp 
@@ -2546,7 +2672,7 @@ subroutine calcflxcaco3sys()
 use globalvariables,only:cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,dictflx,dicdis,dicdif,dicres,alktflx,alkdis  &
     ,alkdif,alkdec,alkres,iz,nz,row,nsp,isp,nspcc,poro,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic  &
     ,dicx,alk,alkx,dici,alki,oxco2,anco2,trans,iiz,col,sporo,turbo2,labs,nonlocal,file_err,ccres,dicres,alkres  &
-    ,sporof,tol,dw,dicdec,mvcc
+    ,sporof,tol,dw,dicdec,mvcc,it
 implicit none 
 
 cctflx =0d0 
@@ -2670,9 +2796,15 @@ ccres = cctflx +  ccdis +  ccdif + ccadv + ccrain
 dicres = dictflx + dicdis + dicdif + dicdec 
 alkres = alktflx + alkdis + alkdif + alkdec 
 
-if (abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec) > tol*10d0) then   ! if residula fluxes are relatively large, record just in case  
-    print*,'not enough accuracy in co2 calc:stop',abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec)
-    write(file_err,*)'not enough accuracy in co2 calc:stop',abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec)
+! if (abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec) > tol*10d0) then   ! if residual fluxes are relatively large, record just in case  
+    ! print*,'not enough accuracy in co2 calc:stop',abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec)
+    ! write(file_err,*)it,'not enough accuracy in co2 calc:stop',abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec)  &
+        ! ,alkres, alktflx,alkdis , alkdif , alkdec 
+        
+if (abs(alkres)/maxval(abs(ccflx)) > tol*10d0) then   ! if residual fluxes are relatively large, record just in case  
+    print*,'not enough accuracy in co2 calc:stop',abs(alkres)/maxval(abs(ccflx))
+    write(file_err,*)it,'not enough accuracy in co2 calc:stop',abs(alkres)/maxval(abs(ccflx))  &
+        ,alkres, alktflx,alkdis , alkdif , alkdec 
 endif
 
 endsubroutine calcflxcaco3sys 
