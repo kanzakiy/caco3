@@ -1282,6 +1282,16 @@ use globalvariables,only: ff,poro,dif_dic0,dif_alk0,dif_o20,dif_dic,dif_alk,kom,
 implicit none
 real(kind=8),intent(in) :: temp,sal,dep 
 
+! subroutine coefs(  &
+!     dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+!     ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+!     )
+! use globalvariables,only:komi,kcci
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),intent(in)::temp,sal,dep,poro(nz),cai
+! real(kind=8),intent(out)::dif_dic(nz),dif_alk(nz),dif_o2(nz),kom(nz),kcc(nz,nspcc)
+! real(kind=8) dif_dic0,dif_alk0,dif_o20,ff(nz),keq1,keq2,keqcc
+
 ff = poro*poro       ! representing tortuosity factor 
 
 dif_dic0 = (151.69d0 + 7.93d0*temp) ! cm2/yr at 2 oC (Huelse et al. 2018)
@@ -1620,6 +1630,15 @@ implicit none
 real(kind=8),intent(in)::time
 integer(kind=4),intent(in)::nt_spn,nt_trs,nt_aft
 real(kind=8),intent(out)::dt
+
+! subroutine timestep(  &
+!     dt & ! output
+!     ,time,nt_spn,nt_trs,nt_aft,time_spn,time_trs,time_aft  &  ! input 
+!     ) 
+! implicit none 
+! real(kind=8),intent(in)::time,time_spn,time_trs,time_aft
+! integer(kind=4),intent(in)::nt_spn,nt_trs,nt_aft
+! real(kind=8),intent(out)::dt
   
 if (time <= time_spn) then   ! spin-up
     if (time+dt> time_spn) then
@@ -1643,6 +1662,23 @@ use globalvariables,only:oxic,anoxic,o2x,o2,o2th,om,omx,zox,izox,kom,komi,nsp,nm
     ,poro
 implicit none 
 logical izox_calc_done
+
+! subroutine omcalc( &
+!     omx,izox  & ! output 
+!     ,oxic,anoxic,o2x,om,kom,nz,sporo,sporoi,sporof &! input 
+!     ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz & ! input 
+!     ) 
+! use globalvariables,only:o2th,komi
+! implicit none 
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),dimension(nz),intent(in)::o2x,om,kom,sporo,w,up,dwn,cnr,adf,poro,dz
+! real(kind=8),intent(in)::sporoi,sporof,wi,dt,trans(nz,nz,nspcc+2),omflx
+! logical,dimension(nspcc+2),intent(in)::oxic,anoxic,labs,turbo2,nonlocal
+! real(kind=8),intent(out)::omx(nz)
+! integer(kind=4),intent(out)::izox
+! integer(kind=4) :: nsp,nmx,iz,ipiv(nz),row,col,iiz,infobls
+! real(kind=4) :: amx(nz,nz),ymx(nz),emx(nz)
+! logical izox_calc_done
 
 !  amx and ymx correspond to A and B in Ax = B
 !  dgesv subroutine of BLAS returns the solution x in ymx 
@@ -1788,6 +1824,19 @@ subroutine calcflxom()
 use globalvariables, only:omadv,omdec,omdif,omrain,omflx,omres,sporo,om,omx,dt,w,dz,z,iz,nz,row,iiz,col,turbo2,labs&
     ,nonlocal,poro,up,dwn,cnr,adf,rho,mom,file_tmp,omtflx,trans,kom,sporof,sporoi,wi,isp,nsp,workdir 
 implicit none 
+
+! subroutine calcflxom(  &
+!     omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
+!     ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+!     )
+! use globalvariables, only:file_tmp,workdir 
+! implicit none 
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),dimension(nz),intent(in)::sporo,om,omx,poro,up,dwn,cnr,adf,rho,kom,w,dz,z
+! real(kind=8),intent(in)::dt,mom,trans(nz,nz,nspcc+2),sporof,sporoi,wi
+! real(kind=8),intent(out)::omadv,omdec,omdif,omrain,omflx,omres,omtflx
+! logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
+! integer(kind=4) :: iz,row,iiz,col,isp,nsp=1
 
 omadv = 0d0
 omdec = 0d0
