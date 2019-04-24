@@ -2208,7 +2208,7 @@ use globalvariables,only: error,itr,nsp,nspcc,nmx,nz,amx,ymx,emx,ipiv,dumx,tol,d
 implicit none 
 
 ! subroutine calccaco3sys(  &
-!     ccx,dicx,alkx  & ! in&output
+!     ccx,dicx,alkx,rcc  & ! in&output
 !     ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,trans & ! input
 !     ,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,dt,omega,domega_ddic,domega_dalk,drcc_domega  & ! input
 !     )
@@ -2220,11 +2220,11 @@ implicit none
 ! real(kind=8),intent(in)::dep,sal,temp,sporoi,sporof,trans(nz,nz,nspcc+2),cc(nz,nspcc),co3sat,kcc(nz,nspcc),ccflx(nspcc)
 ! real(kind=8),intent(in)::ncc,dt,drcc_domega(nz,nspcc)
 ! logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
-! real(kind=8),intent(inout)::dicx(nz),alkx(nz),ccx(nz,nspcc)
+! real(kind=8),intent(inout)::dicx(nz),alkx(nz),ccx(nz,nspcc),rcc(nz,nspcc)
 ! integer(kind=4)::itr,nsp,nmx,infosbr,iiz,n,nnz,infobls,cnt2,cnt,sys,numeric,status,isp,iz,row,col,i,j
 ! integer(kind=4),allocatable :: ipiv(nz),ap(nz),ai(nz)
 ! integer(kind=8) symbolic,numeric
-! real(kind=8)::error,prox(nz),co2x(nz),hco3x(nz),co3x(nz),dco3_ddic(nz),dco3_dalk(nz),rcc(nz,nspcc),drcc_dcc(nz,nspcc)  
+! real(kind=8)::error,prox(nz),co2x(nz),hco3x(nz),co3x(nz),dco3_ddic(nz),dco3_dalk(nz),drcc_dcc(nz,nspcc)  
 ! real(kind=8)::drcc_dco3(nz,nspcc),drcc_ddic(nz,nspcc),drcc_dalk(nz,nspcc),info(90),control(20),drcc_dalk(nz,nspcc)
 ! real(kind=8),allocatable :: amx(nz,nz),ymx(nz),emx(nz),dumx(nz),ax(nz),kai(nz),bx(nz),
 
@@ -2805,9 +2805,30 @@ endsubroutine calccaco3sys
 subroutine calcflxcaco3sys()
 use globalvariables,only:cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,dictflx,dicdis,dicdif,dicres,alktflx,alkdis  &
     ,alkdif,alkdec,alkres,iz,nz,row,nsp,isp,nspcc,poro,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic  &
-    ,dicx,alk,alkx,dici,alki,oxco2,anco2,trans,iiz,col,sporo,turbo2,labs,nonlocal,file_err,ccres,dicres,alkres  &
+    ,dicx,alk,alkx,dici,alki,oxco2,anco2,trans,iiz,col,sporo,turbo2,labs,nonlocal,file_err,ccres  &
     ,sporof,tol,dw,dicdec,mvcc,it
 implicit none 
+
+! subroutine calcflxcaco3sys(  &
+!      cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres & ! output
+!      ,dictflx,dicdis,dicdif,dicres,dicdec   & ! output
+!      ,dw & ! inoutput
+!      ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
+!      ,turbo2,labs,nonlocal,sporof,it        & ! input
+!      )
+! use globalvariables,only:dici,alki,file_err,mvcc,tol
+! implicit none 
+! integer(kind=4),intent(in)::nz,nspcc,it
+! real(kind=8),dimension(nz),intent(in)::poro,dz,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2
+! real(kind=8),dimension(nz),intent(in)::sporo
+! real(kind=8),intent(in)::ccx(nz,nspcc),cc(nz,nspcc),dt,rcc(nz,nspcc),trans(nz,nz,nspcc+2),sporof
+! real(kind=8),intent(inout)::dw(nz)
+! logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
+! real(kind=8),dimension(nspcc),intent(out)::cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres
+! real(kind=8),intent(out)::dictflx,dicdis,dicdif,dicres,alktflx,alkdis,alkdif,alkdec,alkres,dicdec
+! integer(kind=4)::iz,row,nsp,isp,iiz,col
+!
+! nsp = nspcc+2
 
 cctflx =0d0 
 ccdis = 0d0 
