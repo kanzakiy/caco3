@@ -1905,6 +1905,26 @@ use globalvariables,only:amx,ymx,izox,nz,row,poro,o2,o2x,kom,omx,sporo,dif_o2,dz
     ,dt,nmx,ox2om,o2i
 implicit none
 
+! subroutine o2calc_ox(  &
+!     o2x  & ! output
+!     ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+!     )
+! use globalvariables,only:ox2om,o2i
+! implicit none
+! integer(kind=4),intent(in)::nz,izox
+! real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz,dt
+! real(kind=8),intent(out)::o2x(nz)
+! integer(kind=4) :: ipiv(nz),row,nmx,nsp,iz,infobls
+! real(kind=8) :: amx(nz,nz),ymx(nz),
+    
+! nsp=1 ! number of species considered here; 1, only om 
+! nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
+! if (allocated(amx)) deallocate(amx)
+! if (allocated(ymx)) deallocate(ymx)
+! if (allocated(emx)) deallocate(emx)
+! if (allocated(ipiv)) deallocate(ipiv)
+! allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
+
 ! reset matrices 
 amx = 0d0
 ymx = 0d0
@@ -1996,6 +2016,18 @@ subroutine calcflxo2_ox()
 use globalvariables,only:o2dec,o2dif,o2tflx,o2res,iz,nz,sporo,ox2om,kom,omx,dz,poro,dif_o2,dt,o2,o2x,o2i
 implicit none
 
+! subroutine calcflxo2_ox( &
+!     o2dec,o2dif,o2tflx,o2res  & ! output 
+!     ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x  & ! input
+!     )
+! use globalvariables,only:ox2om,o2i
+! implicit none
+! integer(kind=4),intent(in)::nz
+! real(kind=8),dimension(nz),intent(inz)::sporo,kom,omx,dz,poro,dif_o2,o2,o2x
+! real(kind=8),intent(in)::dt
+! real(kind=8),intent(out)::o2dec,o2dif,o2tflx,o2res
+! integer(kind=4) iz
+
 o2dec = 0d0 
 o2dif = 0d0
 o2tflx = 0d0
@@ -2031,6 +2063,26 @@ endsubroutine calcflxo2_ox
 subroutine o2calc_sbox()
 use globalvariables,only:iz,nz,row,nsp,ymx,amx,poro,o2,dt,dif_o2,sporo,o2i,dz,kom,ox2om,omx,izox,nmx,infobls,o2x,ipiv
 implicit none 
+
+! subroutine o2calc_sbox(  &
+!     o2x  & ! output
+!     ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+!     )
+! use globalvariables,only:ox2om,o2i
+! implicit none
+! integer(kind=4),intent(in)::nz,izox
+! real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz,dt
+! real(kind=8),intent(out)::o2x(nz)
+! integer(kind=4) :: ipiv(nz),row,nmx,nsp,iz,infobls
+! real(kind=8) :: amx(nz,nz),ymx(nz),
+    
+! nsp=1 ! number of species considered here; 1, only om 
+! nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
+! if (allocated(amx)) deallocate(amx)
+! if (allocated(ymx)) deallocate(ymx)
+! if (allocated(emx)) deallocate(emx)
+! if (allocated(ipiv)) deallocate(ipiv)
+! allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
 
 amx = 0d0
 ymx = 0d0
@@ -2109,6 +2161,18 @@ subroutine calcflxo2_sbox()
 use globalvariables,only:o2dec,o2dif,o2tflx,iz,nz,sporo,ox2om,kom,omx,dz,o2x,o2,dt,poro,dif_o2,izox,o2res,o2i
 implicit none 
 
+! subroutine calcflxo2_sbox( &
+!     o2dec,o2dif,o2tflx,o2res  & ! output 
+!     ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox  & ! input
+!     )
+! use globalvariables,only:ox2om,o2i
+! implicit none
+! integer(kind=4),intent(in)::nz,izox
+! real(kind=8),dimension(nz),intent(inz)::sporo,kom,omx,dz,poro,dif_o2,o2,o2x
+! real(kind=8),intent(in)::dt
+! real(kind=8),intent(out)::o2dec,o2dif,o2tflx,o2res
+! integer(kind=4) iz
+
 o2dec = 0d0 
 o2dif = 0d0
 o2tflx = 0d0
@@ -2142,6 +2206,27 @@ use globalvariables,only: error,itr,nsp,nspcc,nmx,nz,amx,ymx,emx,ipiv,dumx,tol,d
     ,ax,file_tmp,oxco2,anco2,infobls,kai,bx,cnt2,cnt,symbolic,control,info,numeric,alki,dici,co3sat,ccx_th,kcc,drcc_dalk  &
     ,ccflx,workdir,ncc,sys,i,j,dt,omega,domega_ddic,domega_dalk,drcc_domega
 implicit none 
+
+! subroutine calccaco3sys(  &
+!     ccx,dicx,alkx  & ! in&output
+!     ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,trans & ! input
+!     ,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,dt,omega,domega_ddic,domega_dalk,drcc_domega  & ! input
+!     )
+! use globalvariables,only: tol,poroi,flg_500,fact,file_tmp,alki,dici,ccx_th,workdir,i,j,dt,omega,domega_ddic,domega_dalk,drcc_domega
+! implicit none 
+! integer(kind=4),intent(in)::nspcc,nz
+! real(kind=8),dimension(nz),intent(in)::dic,alk,sporo,poro,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,oxco2,anco2,omega
+! real(kind=8),dimension(nz),intent(in)::domega_dalk,domega_ddic
+! real(kind=8),intent(in)::dep,sal,temp,sporoi,sporof,trans(nz,nz,nspcc+2),cc(nz,nspcc),co3sat,kcc(nz,nspcc),ccflx(nspcc)
+! real(kind=8),intent(in)::ncc,dt,drcc_domega(nz,nspcc)
+! logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
+! real(kind=8),intent(inout)::dicx(nz),alkx(nz),ccx(nz,nspcc)
+! integer(kind=4)::itr,nsp,nmx,infosbr,iiz,n,nnz,infobls,cnt2,cnt,sys,numeric,status,isp,iz,row,col,i,j
+! integer(kind=4),allocatable :: ipiv(nz),ap(nz),ai(nz)
+! integer(kind=8) symbolic,numeric
+! real(kind=8)::error,prox(nz),co2x(nz),hco3x(nz),co3x(nz),dco3_ddic(nz),dco3_dalk(nz),rcc(nz,nspcc),drcc_dcc(nz,nspcc)  
+! real(kind=8)::drcc_dco3(nz,nspcc),drcc_ddic(nz,nspcc),drcc_dalk(nz,nspcc),info(90),control(20),drcc_dalk(nz,nspcc)
+! real(kind=8),allocatable :: amx(nz,nz),ymx(nz),emx(nz),dumx(nz),ax(nz),kai(nz),bx(nz),
 
 !       Here the system is non-linear and thus Newton's method is used (e.g., Steefel and Lasaga, 1994).
 ! 
