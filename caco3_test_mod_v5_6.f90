@@ -2971,6 +2971,20 @@ use globalvariables,only:error,itr,nsp,nmx,amx,ymx,iz,nz,row,sporo,pt,dt,w,dz,de
     ,trans,iiz,labs,turbo2,nonlocal,file_tmp,poro,sporof,ptx,ipiv,infobls,col,emx,workdir
 implicit none
 
+! subroutine claycalc(  &   
+!     ptx                  &  ! in&output
+!     ,nz,sporo,pt,dt,w,dz,detflx,adf,up,dwn,cnr,trans,nspcc,labs,turbo2,nonlocal,poro,     &  !  intput
+!     )
+! use globalvariables,only:msed,file_tmp,workdir
+! implicit none
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),dimension(nz),intent(in)::sporo,pt,w,dz,adf,up,dwn,cnr,poro
+! real(kind=8),intent(in)::dt,detflx,trans(nz,nz,nspcc+2),sporof
+! integer,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
+! real(kind=8),intent(inout)::ptx
+! integer(kind=4)::error,itr,nsp,nmx,iz,row,iiz,ipiv(nz),infobls,col
+! real(kind=8),allocatable::amx(nz,nz),ymx(nz),emx(nz)
+
 error = 1d4
 itr = 0
 
@@ -3097,6 +3111,21 @@ use globalvariables,only:pttflx,ptdif,ptadv,ptres,ptrain,iz,nz,row,nsp,sporo,ptx
     ,w,adf,up,dwn,cnr,sporof,col,iiz,trans,turbo2,labs,nonlocal,dw,mvsed,poro
 implicit none 
 
+! subroutine calcflxclay( &
+!     pttflx,ptdif,ptadv,ptres,ptrain  & ! output
+!     ,dw          &  ! in&output
+!     ,nz,sporo,ptx,pt,dt,dz,detflx,w,adf,up,dwn,cnr,sporof,trans,nspcc,turbo2,labs,nonlocal,poro           &  !  input
+!     )
+! use globalvariables,only:msed,mvsed
+! implicit none 
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),dimension(nz),intent(in)::sporo,ptx,pt,dz,w,adf,up,dwn,cnr,poro
+! real(kind=8),intent(in)::dt,detflx,sporof,trans(nz,nz,nspcc+2)
+! logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
+! real(kind=8),intent(inout)::dw
+! real(kind=8),intent(out)::pttflx,ptdif,ptadv,ptres,ptrain
+! integer(kind=4)::iz,row,nsp=1,col,iiz
+
 pttflx = 0d0 
 ptdif = 0d0 
 ptadv = 0d0 
@@ -3162,6 +3191,17 @@ subroutine getsldprop()
 use globalvariables,only:iz,nz,rho,omx,mom,ptx,msed,ccx,mcc,frt,mvom,mvsed,mvcc,file_tmp,workdir,w,up,dwn,cnr,adf,z
 implicit none 
 
+! subroutine getsldprop(  &
+!     rho,frt,       &  ! output
+!     nz,omx,ptx,ccx,nspcc,w,up,dwn,cnr,adf,z      & ! input)
+! use globalvariables,only:mom,msed,mcc,mvom,mvsed,mvcc,file_tmp,workdir,
+! implicit none 
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),dimension(nz),intent(in)::omx,ptx,w,up,dwn,cnr,adf,z
+! real(kind=8),intent(in)::ccx(nz,nz,nspcc)
+! real(kind=8),intent(out)::rho(nz),frt(nz)
+! integer(kind=4)::iz
+
 do iz=1,nz 
     rho(iz) = omx(iz)*mom + ptx(iz)*msed +  sum(ccx(iz,:))*mcc  ! calculating bulk density 
     frt(iz) = omx(Iz)*mvom + ptx(iz)*mvsed + sum(ccx(iz,:))*mvcc  ! calculation of total vol. fraction of solids 
@@ -3183,8 +3223,19 @@ endsubroutine getsldprop
 
 !**************************************************************************************************************************************
 subroutine burialcalc()
-use globalvariables,only:wi,detflx,msed,mvsed,ccflx,mvcc,omflx,mvom,poroi,iz,nz,w,poroi,dw,dz,poro
+use globalvariables,only:wi,detflx,msed,mvsed,ccflx,mvcc,omflx,mvom,poroi,iz,nz,w,dw,dz,poro
 implicit none
+
+! subroutine burialcalc(  &
+!     w,wi,         & !  output
+!     ,detflx,ccflx,nspcc,omflx,dw,dz,poro    & ! input
+!     )
+! use globalvariables,only:msed,mvsed,mvcc,mvom,poroi
+! implicit none
+! integer(kind=4),intent(in)::nz,nspcc
+! real(kind=8),intent(in)::detflx,ccflx(nspcc),omflx,dw(nz),dz(nz),poro(nz)
+! real(kind=8),intent(out)::wi,w(nz)
+! integer(kind=4)::iz
 
 ! w is up dated by solving 
 !           d(1 - poro)*w/dz = dw
