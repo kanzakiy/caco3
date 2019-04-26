@@ -16,7 +16,7 @@ coeff(4)=-530.1228D0
 coeff(5)=-6.103d0
 coeff(6)=-2.06950d0
 
-calceq1=-126.34048d0+6320.813d0/tmp_k+19.568224*log(tmp_k)
+calceq1=-126.34048d0+6320.813d0/tmp_k+19.568224d0*log(tmp_k)
 calceq1=calceq1+coeff(1)*sal**0.5d0+coeff(2)*sal+coeff(3)*sal**2d0 &
     +(coeff(4)*sal**0.5d0+coeff(5)*sal)/tmp_k   &
     +coeff(6)*sal**0.5d0*log(tmp_k)
@@ -42,7 +42,7 @@ coeff(4)=-772.483d0
 coeff(5)=-20.051D0
 coeff(6)=-3.32254d0
 
-calceq2=-90.18333d0+5143.692d0/tmp_k+14.613358*log(tmp_k)
+calceq2=-90.18333d0+5143.692d0/tmp_k+14.613358d0*log(tmp_k)
 calceq2=calceq2+coeff(1)*sal**0.5d0+coeff(2)*sal+coeff(3)*sal**2d0 &
     +(coeff(4)*sal**0.5d0+coeff(5)*sal)/tmp_k   &
     +coeff(6)*sal**0.5d0*log(tmp_k)
@@ -80,7 +80,7 @@ pres = dep*100d0 ! bar
 
 calceqag = -171.945d0 - 0.077993d0*tmp_k + 2903.293d0/tmp_k &
     +71.595d0*log10(tmp_k) &
-    +(-0.068393d0+0.0017276d0*tmp_k+88.135/tmp_k)*sal**0.5d0 &
+    +(-0.068393d0+0.0017276d0*tmp_k+88.135d0/tmp_k)*sal**0.5d0 &
     -0.10018d0*sal+0.0059415d0*sal**1.5d0 
 calceqag = 10d0**calceqag
 
