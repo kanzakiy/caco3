@@ -40,31 +40,66 @@ dep = 4.0d0 ! km water depth; note that temperature and salinitiy has initially 
 beta = 1.00000000005d0  ! a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
 call makegrid(beta,nz,ztot,dz,z)
 
-call getporosity() ! assume porosity profile 
+! call getporosity() ! assume porosity profile 
+call getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
 
 !!!!!!!!!!!!! flx assignement and initial guess for burial rate !!!!!!!!!!!!!!!!!!!!!!
-call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+! call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+call flxstat(  &
+    omflx,detflx,ccflx  & ! output
+    ,om2cc,ccflxi,mcc,nspcc  & ! input 
+    )
 ! print*,om2cc,ccflxi,detflx,omflx,sum(ccflx)
 ! molar volume (cm3 mol-1) needed for burial rate calculation 
 mvom = mom/rhoom  ! om
 mvsed = msed/rhosed ! clay 
 mvcc = mcc/rhocc ! caco3
-call burial_pre() ! initial guess of burial profile, requiring porosity profile  
-call dep2age() ! depth -age conversion 
-call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+! call burial_pre() ! initial guess of burial profile, requiring porosity profile
+call burial_pre(  &
+    w,wi  & ! output
+    ,detflx,ccflx,nspcc,nz  & ! input 
+    )  
+! call dep2age() ! depth -age conversion 
+call dep2age(  &
+    age &  ! output 
+    ,dz,w,nz  &  ! input
+   )
+! call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+call calcupwindscheme(  &
+    up,dwn,cnr,adf & ! output 
+    ,w,nz   & ! input &
+    )
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-call make_transmx()
+! call make_transmx()
+call make_transmx(  &
+    trans,izrec,izrec2,izml,nonlocal  & ! output 
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    )
 
-call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
+! call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
+call coefs(  &
+    dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+    ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+    )
 
 !!   INITIAL CONDITIONS !!!!!!!!!!!!!!!!!!! 
 cc = 1d-8   ! assume an arbitrary low conc. 
 dic = dici*1d-6/1d3 ! mol/cm3; factor is added to change uM to mol/cm3 
 alk = alki*1d-6/1d3 ! mol/cm3
-
+#ifndef mocsy
 call calcspecies(dic,alk,temp,sal,dep,pro,co2,hco3,co3,nz,infosbr)   ! calculation of individual co2 species at initial conditions
-
+#else 
+call test_mocsy(nz,alk*1d6,dic*1d6,temp,dep*1d3,sal  &
+                        ,co2,hco3,co3,pro,omega,domega_ddic,domega_dalk) ! using mocsy
+co2 = co2/1d6
+hco3 = hco3/1d6
+co3 = co3/1d6
+#endif 
+! stop
 ! passing to transient variables 
 ccx = cc
 dicx = dic
@@ -88,7 +123,12 @@ anco2 = 0d0  ! anoxic degradation of om; here assumed 0 at all time and depth
 do it=1,nt
     print'(A,i0,A,E11.3,A,E11.3,A)','(it,dt,time)  (',it,',',dt,',',time,')'
     
-    call calccaco3sys()
+    ! call calccaco3sys()
+    call calccaco3sys(  &
+        ccx,dicx,alkx,rcc,dt  & ! in&output
+        ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic & ! input
+        ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz  & ! input
+        )
     if (flg_500) then
         print*,'error after calccaco3sys'
         stop
@@ -101,7 +141,14 @@ do it=1,nt
     endif 
     
     ! calculation of fluxes relevant to caco3 and co2 system
-    call calcflxcaco3sys()
+    ! call calcflxcaco3sys()
+    call calcflxcaco3sys(  &
+         cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres & ! output
+         ,dictflx,dicdis,dicdif,dicres,dicdec   & ! output
+         ,dw & ! inoutput
+         ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
+         ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo        & ! input
+         )
     
     write(dumchr(2),'(i0)') interval
     dumchr(1)="(A,"//trim(adjustl(dumchr(2)))//"E11.3"//")"
