@@ -30,11 +30,19 @@ anoxic = .false.
 beta = 1.00000000005d0  ! a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
 call makegrid(beta,nz,ztot,dz,z)
 
-call getporosity() ! assume porosity profile 
+! call getporosity() ! assume porosity profile 
+call getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
 
-call coefs(temp,sal,dep)  ! determining diffusion coeffs, rate constants for om decomposition and cc dissolution
+! call coefs(temp,sal,dep)  ! determining diffusion coeffs, rate constants for om decomposition and cc dissolution
                            ! , dissociation constants of co2 and hco3, and co3 conc. at calcite saturation 
                             ! Note that porosity is needed for diffusion coefficient to reflect tortuosity
+call coefs(  &
+    dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+    ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+    )
 
 ! showing thermodynamic consts which are not functions of depth
 print*,'keq1    ,keq2   ,keqcc  ,co3sat '

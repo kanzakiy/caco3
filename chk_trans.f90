@@ -27,9 +27,17 @@ anoxic = .false.
 beta = 1.00000000005d0  ! a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
 call makegrid(beta,nz,ztot,dz,z)
 
-call getporosity() ! assume porosity profile 
+! call getporosity() ! assume porosity profile 
+call getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
 
-call make_transmx()
+! call make_transmx()
+call make_transmx(  &
+    trans,izrec,izrec2,izml,nonlocal  & ! output 
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    )
 
 ! recording transition matrices for individual species (isp=1 --> om, 2-->clay,3~2+nspcc --> caco3 species)
 ! in default, transition matrices are the same for all the species 

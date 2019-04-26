@@ -34,21 +34,45 @@ anoxic = .false.
 beta = 1.00000000005d0  ! a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
 call makegrid(beta,nz,ztot,dz,z)
 
-call getporosity() ! assume porosity profile 
+! call getporosity() ! assume porosity profile 
+call getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
 
 !!!!!!!!!!!!! flx assignement and initial guess for burial rate !!!!!!!!!!!!!!!!!!!!!!
-call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+! call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+call flxstat(  &
+    omflx,detflx,ccflx  & ! output
+    ,om2cc,ccflxi,mcc,nspcc  & ! input 
+    )
 ! print*,om2cc,ccflxi,detflx,omflx,sum(ccflx)
 ! molar volume (cm3 mol-1) needed for burial rate calculation 
 mvom = mom/rhoom  ! om
 mvsed = msed/rhosed ! clay 
 mvcc = mcc/rhocc ! caco3
-call burial_pre() ! initial guess of burial profile, requiring porosity profile  
-call dep2age() ! depth -age conversion 
-call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+! call burial_pre() ! initial guess of burial profile, requiring porosity profile  
+call burial_pre(  &
+    w,wi  & ! output
+    ,detflx,ccflx,nspcc,nz  & ! input 
+    )
+! call dep2age() ! depth -age conversion 
+call dep2age(  &
+    age &  ! output 
+    ,dz,w,nz  &  ! input
+   )
+! call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+call calcupwindscheme(  &
+    up,dwn,cnr,adf & ! output 
+    ,w,nz   & ! input &
+    )
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-call make_transmx()
+! call make_transmx()
+call make_transmx(  &
+    trans,izrec,izrec2,izml,nonlocal  & ! output 
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    )
 
 om = 1d-8  ! assume an arbitrary low conc. 
 o2 = o2i*1d-6/1d3 ! o2 conc. in uM converted to mol/cm3
@@ -66,9 +90,19 @@ rho = 2.5d0 ! assume here
 do it=1,nt
     print'(A,i0,A,E11.3,A,E11.3,A)','(it,dt,time)  (',it,',',dt,',',time,')'
     
-    call omcalc() ! om conc. calculation 
+    ! call omcalc() ! om conc. calculation 
+    call omcalc( &
+        omx,izox  & ! output 
+        ,kom   &  ! in&output
+        ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
+        ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
+        ) 
     ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
-    call calcflxom()
+    ! call calcflxom()
+    call calcflxom(  &
+        omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
+        ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+        )
     
     write(dumchr(2),'(i0)') interval
     dumchr(1)="(A,"//trim(adjustl(dumchr(2)))//"E11.3"//")"

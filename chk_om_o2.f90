@@ -38,23 +38,51 @@ anoxic = .false.
 beta = 1.00000000005d0  ! a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
 call makegrid(beta,nz,ztot,dz,z)
 
-call getporosity() ! assume porosity profile 
+! call getporosity() ! assume porosity profile 
+call getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
 
 !!!!!!!!!!!!! flx assignement and initial guess for burial rate !!!!!!!!!!!!!!!!!!!!!!
-call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+! call flxstat()  ! assume fluxes of om, cc and clay, required to calculate burial velocity
+call flxstat(  &
+    omflx,detflx,ccflx  & ! output
+    ,om2cc,ccflxi,mcc,nspcc  & ! input 
+    )
 ! print*,om2cc,ccflxi,detflx,omflx,sum(ccflx)
 ! molar volume (cm3 mol-1) needed for burial rate calculation 
 mvom = mom/rhoom  ! om
 mvsed = msed/rhosed ! clay 
 mvcc = mcc/rhocc ! caco3
-call burial_pre() ! initial guess of burial profile, requiring porosity profile  
-call dep2age() ! depth -age conversion 
-call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+! call burial_pre() ! initial guess of burial profile, requiring porosity profile   
+call burial_pre(  &
+    w,wi  & ! output
+    ,detflx,ccflx,nspcc,nz  & ! input 
+    )
+! call dep2age() ! depth -age conversion 
+call dep2age(  &
+    age &  ! output 
+    ,dz,w,nz  &  ! input
+   )
+! call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+call calcupwindscheme(  &
+    up,dwn,cnr,adf & ! output 
+    ,w,nz   & ! input &
+    )
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-call make_transmx()
+! call make_transmx()
+call make_transmx(  &
+    trans,izrec,izrec2,izml,nonlocal  & ! output 
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    )
 
-call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
+! call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
+call coefs(  &
+    dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+    ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+    )
 
 om = 1d-8  ! assume an arbitrary low conc. 
 o2 = o2i*1d-6/1d3 ! o2 conc. in uM converted to mol/cm3
@@ -83,9 +111,19 @@ do it=1,nt
     
     do while (error > tol)
     
-        call omcalc() ! om conc. calculation 
+        ! call omcalc() ! om conc. calculation 
+        call omcalc( &
+            omx,izox  & ! output 
+            ,kom   &  ! in&output
+            ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
+            ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
+            ) 
         ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
-        call calcflxom()
+        ! call calcflxom()
+        call calcflxom(  &
+            omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
+            ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+            )
         
         ! print*,'~~~~ conc ~~~~'
         ! print dumchr(1), 'z  :',(z(iz),iz=1,nz,nz/interval)
@@ -98,11 +136,27 @@ do it=1,nt
         ! sb omcalc calculates izox, which is the deepest grid where o2 >=0. 
         
         if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
-            call o2calc_ox()  ! o2 calculation when o2 penetration depth (zox) is the same as bottom depth. 
-            call calcflxo2_ox() !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+            ! call o2calc_ox()  ! o2 calculation when o2 penetration depth (zox) is the same as bottom depth. 
+            call o2calc_ox(  &
+                o2x  & ! output
+                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+                )
+            ! call calcflxo2_ox() !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+            call calcflxo2_ox( &
+                o2dec,o2dif,o2tflx,o2res  & ! output 
+                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x  & ! input
+                )
         else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
-            call o2calc_sbox() ! o2 calculation when o2 is depleted within the calculation domain.
-            call calcflxo2_sbox() ! fluxes relevant to oxygen 
+            ! call o2calc_sbox() ! o2 calculation when o2 is depleted within the calculation domain.
+            call o2calc_sbox(  &
+                o2x  & ! output
+                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+                )
+            ! call calcflxo2_sbox() ! fluxes relevant to oxygen 
+            call calcflxo2_sbox( &
+                o2dec,o2dif,o2tflx,o2res  & ! output 
+                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox  & ! input
+                )
         endif
         
         ! print*,'~~~~ conc ~~~~'
