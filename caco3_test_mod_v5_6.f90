@@ -124,7 +124,7 @@ integer(kind=4) :: nt = 1000000  ! maximum interation for time (do not have to b
 integer(kind=4),parameter :: nrec = 15  ! total recording time of sediment profiles 
 integer(kind=4) cntrec, itrec  ! integers used for counting recording time 
 integer(kind=4) :: izox_minerr =0  ! grid number where error in zox is minimum 
-real(kind=4) up(nz), dwn(nz), cnr(nz) ! advection calc. schemes; up or down wind, or central schemes if 1
+real(kind=8) up(nz), dwn(nz), cnr(nz) ! advection calc. schemes; up or down wind, or central schemes if 1
 real(kind=8) adf(nz)  ! factor to make sure mass conversion 
 real(kind=8) :: time, dt = 1d2  ! time and time step 
 real(kind=8) rectime(nrec), time_max ! recording time and maximum time 
@@ -263,21 +263,41 @@ call makegrid(beta,nz,ztot,dz,z)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!! FUNDAMENTAL PARAMETERS !!!!!!!!!!!!!
-call flxstat() ! assume steady state flux for detrital material 
+! call flxstat() ! assume steady state flux for detrital material 
+call flxstat(  &
+    omflx,detflx,ccflx  & ! output
+    ,om2cc,ccflxi,mcc,nspcc  & ! input 
+    )
 
 ! calculate molar volume (cm3/mol) = molar mass (g/mol) / density (g/cm3)
 mvom = mom/rhoom  ! om
 mvsed = msed/rhosed ! clay 
 mvcc = mcc/rhocc ! caco3
     
-call getporosity() ! assume porosity profile 
+! call getporosity() ! assume porosity profile 
+call getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
 
 ! below is the point when the calculation is re-started with smaller time step
 500 continue
 
-call burial_pre() ! initial guess of burial profile 
-call dep2age() ! depth -age conversion 
-call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+! call burial_pre() ! initial guess of burial profile 
+call burial_pre(  &
+    w,wi  & ! output
+    ,detflx,ccflx,nspcc,nz  & ! input 
+    )
+! call dep2age() ! depth -age conversion 
+call dep2age(  &
+    age &  ! output 
+    ,dz,w,nz  &  ! input
+   )
+! call calcupwindscheme() ! determine factors for upwind scheme to represent burial advection
+call calcupwindscheme(  &
+    up,dwn,cnr,adf & ! output 
+    ,w,nz   & ! input &
+    )
 ! ---------------------
 
 zox = 10d0 ! priori assumed oxic zone 
@@ -302,10 +322,18 @@ call sig2sp_pre() ! end-member signal assignment
 !!!~~~~~~~~~~~~~~~~~
 
 !!!! TRANSITION MATRIX !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-call make_transmx()
+! call make_transmx()
+call make_transmx(  &
+    trans,izrec,izrec2,izml,nonlocal  & ! output 
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    )
 
 !~~~~~~~~diffusion & reaction~~~~~~~~~~~~~~~~~~~~~~
-call coefs(temp,sal,dep)
+! call coefs(temp,sal,dep)
+call coefs(  &
+    dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+    ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+    )
 
 !!   INITIAL CONDITIONS !!!!!!!!!!!!!!!!!!! 
 cc = 1d-8   ! assume an arbitrary low conc. 
@@ -386,7 +414,11 @@ do
 
     !! === temperature & pressure and associated boundary changes ====
     ! if temperature is changed during signal change event this affect diffusion coeff etc. 
-    call coefs(temp,sal,dep)
+    ! call coefs(temp,sal,dep)
+    call coefs(  &
+        dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+        ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+        )
     !! /////////////////////
 
 #ifndef nonrec 
@@ -437,19 +469,45 @@ do
     do while (error > tol)
 
         !~~~~~~ OM calculation ~~~~~~~~~~~~~~~~~
-        call omcalc()
+        ! call omcalc()
+        call omcalc( &
+            omx,izox  & ! output 
+            ,kom   &  ! in&output
+            ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
+            ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
+            ) 
         ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
-        call calcflxom()
+        ! call calcflxom()
+        call calcflxom(  &
+            omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
+            ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+            )
         !~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
-            call o2calc_ox()
+            ! call o2calc_ox()
+            call o2calc_ox(  &
+                o2x  & ! output
+                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+                )
             !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
-            call calcflxo2_ox()
+            ! call calcflxo2_ox()
+            call calcflxo2_ox( &
+                o2dec,o2dif,o2tflx,o2res  & ! output 
+                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x  & ! input
+                )
         else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
-            call o2calc_sbox()
+            ! call o2calc_sbox()
+            call o2calc_sbox(  &
+                o2x  & ! output
+                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+                )
             ! fluxes relevant to oxygen 
-            call calcflxo2_sbox()
+            ! call calcflxo2_sbox()
+            call calcflxo2_sbox( &
+                o2dec,o2dif,o2tflx,o2res  & ! output 
+                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox  & ! input
+                )
         endif
 
         ! update of zox 
@@ -544,7 +602,12 @@ do
 #endif 
 
     !!  ~~~~~~~~~~~~~~~~~~~~~~ CaCO3 solid, ALK and DIC  calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    call calccaco3sys()
+    ! call calccaco3sys()
+    call calccaco3sys(  &
+        ccx,dicx,alkx,rcc,dt  & ! in&output
+        ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic & ! input
+        ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz  & ! input
+        )
     if (flg_500) go to 500
     ! ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
     ! update aqueous co2 species 
@@ -567,7 +630,14 @@ do
 #endif 
 
     ! calculation of fluxes relevant to caco3 and co2 system
-    call calcflxcaco3sys()
+    ! call calcflxcaco3sys()
+    call calcflxcaco3sys(  &
+         cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres & ! output
+         ,dictflx,dicdis,dicdif,dicres,dicdec   & ! output
+         ,dw & ! inoutput
+         ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
+         ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo        & ! input
+         )
 
 #ifndef nonrec
     if (it==1) then 
@@ -586,8 +656,18 @@ do
     enddo
 #endif
     ! ~~~~ calculation clay  ~~~~~~~~~~~~~~~~~~
-    call claycalc()
-    call calcflxclay()
+    ! call claycalc()
+    call claycalc(  &   
+        ptx                  &  ! output
+        ,nz,sporo,pt,dt,w,dz,detflx,adf,up,dwn,cnr,trans  &  ! input
+        ,nspcc,labs,turbo2,nonlocal,poro,sporof     &  !  intput
+        )
+    ! call calcflxclay()
+    call calcflxclay( &
+        pttflx,ptdif,ptadv,ptres,ptrain  & ! output
+        ,dw          &  ! in&output
+        ,nz,sporo,ptx,pt,dt,dz,detflx,w,adf,up,dwn,cnr,sporof,trans,nspcc,turbo2,labs,nonlocal,poro           &  !  input
+        )
 
 #ifndef nonrec
     if (it==1) write(file_ptflx,*) 'time, pttflx, ptdif, ptadv, ptrain, ptres'
@@ -597,7 +677,11 @@ do
 
     err_fx = maxval(abs(frt - 1d0))  ! recording previous error in total vol. fraction of solids 
 
-    call getsldprop() ! get solid property, rho (density) and frt (total vol.frac)
+    ! call getsldprop() ! get solid property, rho (density) and frt (total vol.frac)
+    call getsldprop(  &
+        rho,frt,       &  ! output
+        nz,omx,ptx,ccx,nspcc,w,up,dwn,cnr,adf,z      & ! input
+        )
 
     err_f = maxval(abs(frt - 1d0))  ! new error in total vol. fraction (must be 1 in theory) 
     if (err_f < err_fx) err_f_min = err_f  ! recording minimum error 
@@ -608,10 +692,18 @@ do
 
     wx = w  ! recording previous burial velocity 
 
-    call burialcalc() ! get new burial velocity
+    ! call burialcalc() ! get new burial velocity
+    call burialcalc(  &
+        w,wi         & !  output
+        ,detflx,ccflx,nspcc,omflx,dw,dz,poro,nz    & ! input
+        )
 
     ! ------------ determine calculation scheme for advection 
-    call calcupwindscheme()
+    ! call calcupwindscheme()
+    call calcupwindscheme(  &
+        up,dwn,cnr,adf & ! output 
+        ,w,nz   & ! input &
+        )
 
     ! error and iteration evaluation 
     itr_w = itr_w + 1  ! counting iteration for w 
@@ -635,7 +727,11 @@ do
     400 continue
 
     !! depth -age conversion 
-    call dep2age()
+    ! call dep2age()
+    call dep2age(  &
+        age &  ! output 
+        ,dz,w,nz  &  ! input
+       )
 
     ! ---------------------
     !/////// ISOTOPES /////
@@ -857,18 +953,18 @@ endsubroutine makeprofdir
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine flxstat()  ! determine steady state flux 
-use globalvariables, only: omflx,detflx,ccflx,om2cc,ccflxi,mcc,nspcc
-implicit none
+! subroutine flxstat()  ! determine steady state flux 
+! use globalvariables, only: omflx,detflx,ccflx,om2cc,ccflxi,mcc,nspcc
+! implicit none
 
-! subroutine flxstat(  &
-!     omflx,deflx,ccflx  & ! output
-!     ,om2cc,ccflxi,mcc,nspcc  & ! input 
-!     )
-! implicit none 
-! integer(kind=4),intent(in)::nspcc
-! real(kind=8),intent(in)::om2cc,ccflxi,mcc
-! real(kind=8),intent(out)::omflx,detflx,ccflx(nspcc)
+subroutine flxstat(  &
+    omflx,detflx,ccflx  & ! output
+    ,om2cc,ccflxi,mcc,nspcc  & ! input 
+    )
+implicit none 
+integer(kind=4),intent(in)::nspcc
+real(kind=8),intent(in)::om2cc,ccflxi,mcc
+real(kind=8),intent(out)::omflx,detflx,ccflx(nspcc)
 
 omflx = om2cc*ccflxi  ! om rain = rain ratio x caco3 rain 
 detflx = (1d0/9d0)*ccflxi*mcc ! 90% of mass flux becomes inorganic C; g cm-2 yr-1
@@ -878,21 +974,21 @@ endsubroutine flxstat
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine getporosity()
-use globalvariables, only: poro,poroi,calgg,pore_max,exp_pore,z,porof,sporo,sporof,sporoi,nz 
-implicit none 
+! subroutine getporosity()
+! use globalvariables, only: poro,poroi,calgg,pore_max,exp_pore,z,porof,sporo,sporof,sporoi,nz 
+! implicit none 
 
-! subroutine getporosity(  &
-!      poro,porof,sporo,sporof,sporoi & ! output
-!      ,z,nz  & ! input
-!      )
-! use globalvariables,only:poroi
-! implicit none
-! integer(kind=4),intent(in)::nz
-! real(kind=8),dimension(nz),intent(in)::z
-! real(kind=8),dimension(nz),intent(out)::poro,sporo
-! real(kind=8),intent(out)::porof,sporoi,sporof
-! real(kind=8) calgg,pore_max,exp_pore
+subroutine getporosity(  &
+     poro,porof,sporo,sporof,sporoi & ! output
+     ,z,nz  & ! input
+     )
+use globalvariables,only:poroi
+implicit none
+integer(kind=4),intent(in)::nz
+real(kind=8),dimension(nz),intent(in)::z
+real(kind=8),dimension(nz),intent(out)::poro,sporo
+real(kind=8),intent(out)::porof,sporoi,sporof
+real(kind=8) calgg,pore_max,exp_pore
 
 poro = poroi  ! constant porosity 
 ! ----------- Archer's parameterization 
@@ -912,18 +1008,19 @@ endsubroutine getporosity
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine burial_pre() 
-use globalvariables, only: w,wi,detflx,msed,mvsed,ccflx,mvcc,poroi
-implicit none
-
-! subroutine burial_pre(  &
-!     w,wi  & ! output
-!     ,detflx,ccflx,msed,mvsed,mvcc,nspcc  ! input &
-!     )
-! use globalvariables, only: poroi
+! subroutine burial_pre() 
+! use globalvariables, only: w,wi,detflx,msed,mvsed,ccflx,mvcc,poroi
 ! implicit none
-! integer(kind=4),intent(in)::nspcc
-! real(kind=8),intent(in)::detflx,ccflx,msed,mvsed,mvcc 
+
+subroutine burial_pre(  &
+    w,wi  & ! output
+    ,detflx,ccflx,nspcc,nz  & ! input 
+    )
+use globalvariables, only: poroi,msed,mvsed,mvcc
+implicit none
+integer(kind=4),intent(in)::nspcc,nz
+real(kind=8),intent(in)::detflx,ccflx(nspcc)
+real(kind=8),intent(out)::w(nz),wi
 
 ! burial rate w from rain fluxes represented by volumes
 ! initial guess assuming a box representation (this guess is accurate when there is no caco3 dissolution occurring) 
@@ -936,19 +1033,20 @@ endsubroutine burial_pre
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine dep2age()
-use globalvariables,only:dage,dz,w,age,iz,nz
-implicit none 
+! subroutine dep2age()
+! use globalvariables,only:dage,dz,w,age,iz,nz
+! implicit none 
 
-! dep2age(age, &  ! output 
-!   (dz,w,nz  &  ! input
-!    )
-! implicit none
-! integer(kind=4),intent(in)::nz
-! real(kind=8),intent(in)::dz(nz),w(nz)
-! real(kind=8),intent(out)::age(nz)
-! real(kind=8)::dage(nz)
-! integer(kind=4) iz
+subroutine dep2age(  &
+    age &  ! output 
+    ,dz,w,nz  &  ! input
+   )
+implicit none
+integer(kind=4),intent(in)::nz
+real(kind=8),intent(in)::dz(nz),w(nz)
+real(kind=8),intent(out)::age(nz)
+real(kind=8)::dage(nz)
+integer(kind=4) iz
 
 dage = dz/w  ! time spans of individual sediment layers 
 age = 0d0
@@ -961,20 +1059,20 @@ endsubroutine dep2age
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calcupwindscheme()
-use globalvariables,only: up,dwn,cnr,adf,iz,nz,w,corrf
-implicit none 
+! subroutine calcupwindscheme()
+! use globalvariables,only: up,dwn,cnr,adf,iz,nz,w,corrf
+! implicit none 
 
-! calcupwindscheme(  &
-!     up,dwn,cnr,adf & ! output 
-!     ,w,nz   & ! input &
-!     )
-! implicit none
-! integer(kind=4),intent(in)::nz
-! real(kind=8),intent(in)::w(nz)
-! real(kind=8),dimension(nz),intent(out)::up,dwn,cnr,adf
-! real(kind=8) corrf
-! integer(kind=4) iz
+subroutine calcupwindscheme(  &
+    up,dwn,cnr,adf & ! output 
+    ,w,nz   & ! input &
+    )
+implicit none
+integer(kind=4),intent(in)::nz
+real(kind=8),intent(in)::w(nz)
+real(kind=8),dimension(nz),intent(out)::up,dwn,cnr,adf
+real(kind=8) corrf
+integer(kind=4) iz
 
 
 ! ------------ determine variables to realize advection 
@@ -1153,28 +1251,28 @@ endsubroutine sig2sp_pre
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine make_transmx()
-use globalvariables, only:labs,translabs,nlabs,ilabs,translabs_tmp,dumchr,file_tmp,zml,zml_ref &
-    ,zrec,zrec2,iz,nz,z,izrec,izrec2,nonlocal,isp,nspcc,turbo2,dbio,izml,transdbio,transturbo2  &
-    ,trans,nobio,dz,sporo  
-implicit none 
+! subroutine make_transmx()
+! use globalvariables, only:labs,translabs,nlabs,ilabs,translabs_tmp,dumchr,file_tmp,zml,zml_ref &
+    ! ,zrec,zrec2,iz,nz,z,izrec,izrec2,nonlocal,isp,nspcc,turbo2,dbio,izml,transdbio,transturbo2  &
+    ! ,trans,nobio,dz,sporo  
+! implicit none 
 
-! subroutine make_transmx(  &
-!     trans,izrec,izrec2,izml,nonlocal  & ! output 
-!     ,labs,nspcc,turbo2,nobio,dz,sporo,nz,nspcc,z  & ! input
-!     )
-! use globalvariables,only:file_tmp,zml_ref
-! implicit none
-! integer(kind=4),intent(in)::nspcc,nz
-! real(kind=8),intent(in)::dz(nz),sporo(nz),z(nz)
-! logical,intent(in)::labs(nspcc+2),turbo2(nspcc+2),nobio(nspcc+2)
-! real(kind=8),intent(out)::trans(nz,nz,nspcc+2)
-! logical,intent(out)::nonlocal(nspcc+2)
-! integer(kind=4),intent(out)::izrec,izrec2,izml
-! integer(kind=4) nlabs,ilabs,iz,isp
-! real(kind=8) :: translabs(nz,nz),translabs_tmp(nz,nz),dbio(nz),transdbio(nz,nz),transturbo2(nz,nz)
-! real(kind=8) :: zml,zrec,zrec2
-! character*25 dumchr(3)
+subroutine make_transmx(  &
+    trans,izrec,izrec2,izml,nonlocal  & ! output 
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    )
+use globalvariables,only:file_tmp,zml_ref
+implicit none
+integer(kind=4),intent(in)::nspcc,nz
+real(kind=8),intent(in)::dz(nz),sporo(nz),z(nz)
+logical,intent(in)::labs(nspcc+2),turbo2(nspcc+2),nobio(nspcc+2)
+real(kind=8),intent(out)::trans(nz,nz,nspcc+2)
+logical,intent(out)::nonlocal(nspcc+2)
+integer(kind=4),intent(out)::izrec,izrec2,izml
+integer(kind=4) nlabs,ilabs,iz,isp
+real(kind=8) :: translabs(nz,nz),translabs_tmp(nz,nz),dbio(nz),transdbio(nz,nz),transturbo2(nz,nz)
+real(kind=8) :: zml(nspcc+2),zrec,zrec2
+character*25 dumchr(3)
 
 !~~~~~~~~~~~~ loading transition matrix from LABS ~~~~~~~~~~~~~~~~~~~~~~~~
 if (any(labs)) then
@@ -1276,21 +1374,21 @@ endsubroutine make_transmx
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine coefs(temp,sal,dep)
-use globalvariables,only: ff,poro,dif_dic0,dif_alk0,dif_o20,dif_dic,dif_alk,kom,komi,kcc,kcci  &
-    ,keq1,keq2,calceq1,calceq2,keqcc,calceqcc,co3sat,cai,dif_o2
-implicit none
-real(kind=8),intent(in) :: temp,sal,dep 
+! subroutine coefs(temp,sal,dep)
+! use globalvariables,only: ff,poro,dif_dic0,dif_alk0,dif_o20,dif_dic,dif_alk,kom,komi,kcc,kcci  &
+    ! ,keq1,keq2,calceq1,calceq2,keqcc,calceqcc,co3sat,cai,dif_o2
+! implicit none
+! real(kind=8),intent(in) :: temp,sal,dep 
 
-! subroutine coefs(  &
-!     dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
-!     ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
-!     )
-! use globalvariables,only:komi,kcci
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),intent(in)::temp,sal,dep,poro(nz),cai
-! real(kind=8),intent(out)::dif_dic(nz),dif_alk(nz),dif_o2(nz),kom(nz),kcc(nz,nspcc)
-! real(kind=8) dif_dic0,dif_alk0,dif_o20,ff(nz),keq1,keq2,keqcc
+subroutine coefs(  &
+    dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+    ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+    )
+use globalvariables,only:komi,kcci,calceqcc,calceq1,calceq2
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),intent(in)::temp,sal,dep,poro(nz),cai
+real(kind=8),intent(out)::dif_dic(nz),dif_alk(nz),dif_o2(nz),kom(nz),kcc(nz,nspcc),co3sat
+real(kind=8) dif_dic0,dif_alk0,dif_o20,ff(nz),keq1,keq2,keqcc
 
 ff = poro*poro       ! representing tortuosity factor 
 
@@ -1318,6 +1416,8 @@ keq2 = calceq2(temp,sal,dep) ! bicarbonate dissociation const. function called f
 
 keqcc = calceqcc(temp,sal,dep) ! calcite solubility function called from caco3_therm.f90
 co3sat = keqcc/cai ! co3 conc. at calcite saturation 
+
+! print*,cai,keqcc,co3sat
 
 endsubroutine coefs
 !**************************************************************************************************************************************
@@ -1656,29 +1756,33 @@ endsubroutine timestep
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine omcalc() 
-use globalvariables,only:oxic,anoxic,o2x,o2,o2th,om,omx,zox,izox,kom,komi,nsp,nmx,iz,nz,amx,ymx,emx,ipiv &
-    ,sporo,sporoi,sporof,w,wi,dw,dt,row,col,iiz,up,dwn,cnr,adf,trans,turbo2,labs,nonlocal,infobls,dz,omflx &
-    ,poro
-implicit none 
-logical izox_calc_done
-
-! subroutine omcalc( &
-!     omx,izox  & ! output 
-!     ,oxic,anoxic,o2x,om,kom,nz,sporo,sporoi,sporof &! input 
-!     ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz & ! input 
-!     ) 
-! use globalvariables,only:o2th,komi
+! subroutine omcalc() 
+! use globalvariables,only:oxic,anoxic,o2x,o2,o2th,om,omx,zox,izox,kom,komi,nsp,nmx,iz,nz,amx,ymx,emx,ipiv &
+    ! ,sporo,sporoi,sporof,w,wi,dw,dt,row,col,iiz,up,dwn,cnr,adf,trans,turbo2,labs,nonlocal,infobls,dz,omflx &
+    ! ,poro
 ! implicit none 
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),dimension(nz),intent(in)::o2x,om,kom,sporo,w,up,dwn,cnr,adf,poro,dz
-! real(kind=8),intent(in)::sporoi,sporof,wi,dt,trans(nz,nz,nspcc+2),omflx
-! logical,dimension(nspcc+2),intent(in)::oxic,anoxic,labs,turbo2,nonlocal
-! real(kind=8),intent(out)::omx(nz)
-! integer(kind=4),intent(out)::izox
-! integer(kind=4) :: nsp,nmx,iz,ipiv(nz),row,col,iiz,infobls
-! real(kind=4) :: amx(nz,nz),ymx(nz),emx(nz)
 ! logical izox_calc_done
+
+subroutine omcalc( &
+    omx,izox  & ! output 
+    ,kom   &  ! in&output
+    ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
+    ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
+    ) 
+use globalvariables,only:o2th,komi
+implicit none 
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),dimension(nz),intent(in)::o2x,om,sporo,w,up,dwn,cnr,adf,poro,dz
+real(kind=8),intent(in)::sporoi,sporof,wi,dt,trans(nz,nz,nspcc+2),omflx
+logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
+logical,intent(in)::oxic,anoxic
+real(kind=8),intent(out)::omx(nz)
+integer(kind=4),intent(out)::izox
+real(kind=8),intent(inout)::kom(nz)
+integer(kind=4) :: nsp,nmx,iz,row,col,iiz,infobls
+integer(kind=4),allocatable::ipiv(:)
+real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:)
+logical izox_calc_done
 
 !  amx and ymx correspond to A and B in Ax = B
 !  dgesv subroutine of BLAS returns the solution x in ymx 
@@ -1820,23 +1924,23 @@ endsubroutine omcalc
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calcflxom()
-use globalvariables, only:omadv,omdec,omdif,omrain,omflx,omres,sporo,om,omx,dt,w,dz,z,iz,nz,row,iiz,col,turbo2,labs&
-    ,nonlocal,poro,up,dwn,cnr,adf,rho,mom,file_tmp,omtflx,trans,kom,sporof,sporoi,wi,isp,nsp,workdir 
-implicit none 
-
-! subroutine calcflxom(  &
-!     omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
-!     ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
-!     )
-! use globalvariables, only:file_tmp,workdir 
+! subroutine calcflxom()
+! use globalvariables, only:omadv,omdec,omdif,omrain,omflx,omres,sporo,om,omx,dt,w,dz,z,iz,nz,row,iiz,col,turbo2,labs&
+    ! ,nonlocal,poro,up,dwn,cnr,adf,rho,mom,file_tmp,omtflx,trans,kom,sporof,sporoi,wi,isp,nsp,workdir 
 ! implicit none 
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),dimension(nz),intent(in)::sporo,om,omx,poro,up,dwn,cnr,adf,rho,kom,w,dz,z
-! real(kind=8),intent(in)::dt,mom,trans(nz,nz,nspcc+2),sporof,sporoi,wi
-! real(kind=8),intent(out)::omadv,omdec,omdif,omrain,omflx,omres,omtflx
-! logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
-! integer(kind=4) :: iz,row,iiz,col,isp,nsp=1
+
+subroutine calcflxom(  &
+    omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
+    ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+    )
+use globalvariables, only:file_tmp,workdir 
+implicit none 
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),dimension(nz),intent(in)::sporo,om,omx,poro,up,dwn,cnr,adf,rho,kom,w,dz,z
+real(kind=8),intent(in)::dt,mom,trans(nz,nz,nspcc+2),sporof,sporoi,wi
+real(kind=8),intent(out)::omadv,omdec,omdif,omrain,omflx,omres,omtflx
+logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
+integer(kind=4) :: iz,row,iiz,col,isp,nsp=1
 
 omadv = 0d0
 omdec = 0d0
@@ -1900,30 +2004,32 @@ endsubroutine calcflxom
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine o2calc_ox()
-use globalvariables,only:amx,ymx,izox,nz,row,poro,o2,o2x,kom,omx,sporo,dif_o2,dz,infobls,nsp,iz,ipiv &
-    ,dt,nmx,ox2om,o2i
-implicit none
-
-! subroutine o2calc_ox(  &
-!     o2x  & ! output
-!     ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
-!     )
-! use globalvariables,only:ox2om,o2i
+! subroutine o2calc_ox()
+! use globalvariables,only:amx,ymx,izox,nz,row,poro,o2,o2x,kom,omx,sporo,dif_o2,dz,infobls,nsp,iz,ipiv &
+    ! ,dt,nmx,ox2om,o2i
 ! implicit none
-! integer(kind=4),intent(in)::nz,izox
-! real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz,dt
-! real(kind=8),intent(out)::o2x(nz)
-! integer(kind=4) :: ipiv(nz),row,nmx,nsp,iz,infobls
-! real(kind=8) :: amx(nz,nz),ymx(nz),
+
+subroutine o2calc_ox(  &
+    o2x  & ! output
+    ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+    )
+use globalvariables,only:ox2om,o2i
+implicit none
+integer(kind=4),intent(in)::nz,izox
+real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz
+real(kind=8),intent(in)::dt
+real(kind=8),intent(out)::o2x(nz)
+integer(kind=4) :: row,nmx,nsp,iz,infobls
+real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:)
+integer(kind=4),allocatable::ipiv(:)
     
-! nsp=1 ! number of species considered here; 1, only om 
-! nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
-! if (allocated(amx)) deallocate(amx)
-! if (allocated(ymx)) deallocate(ymx)
-! if (allocated(emx)) deallocate(emx)
-! if (allocated(ipiv)) deallocate(ipiv)
-! allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
+nsp=1 ! number of species considered here; 1, only om 
+nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
+if (allocated(amx)) deallocate(amx)
+if (allocated(ymx)) deallocate(ymx)
+if (allocated(emx)) deallocate(emx)
+if (allocated(ipiv)) deallocate(ipiv)
+allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
 
 ! reset matrices 
 amx = 0d0
@@ -2012,21 +2118,21 @@ endsubroutine o2calc_ox
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calcflxo2_ox()
-use globalvariables,only:o2dec,o2dif,o2tflx,o2res,iz,nz,sporo,ox2om,kom,omx,dz,poro,dif_o2,dt,o2,o2x,o2i
-implicit none
-
-! subroutine calcflxo2_ox( &
-!     o2dec,o2dif,o2tflx,o2res  & ! output 
-!     ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x  & ! input
-!     )
-! use globalvariables,only:ox2om,o2i
+! subroutine calcflxo2_ox()
+! use globalvariables,only:o2dec,o2dif,o2tflx,o2res,iz,nz,sporo,ox2om,kom,omx,dz,poro,dif_o2,dt,o2,o2x,o2i
 ! implicit none
-! integer(kind=4),intent(in)::nz
-! real(kind=8),dimension(nz),intent(inz)::sporo,kom,omx,dz,poro,dif_o2,o2,o2x
-! real(kind=8),intent(in)::dt
-! real(kind=8),intent(out)::o2dec,o2dif,o2tflx,o2res
-! integer(kind=4) iz
+
+subroutine calcflxo2_ox( &
+    o2dec,o2dif,o2tflx,o2res  & ! output 
+    ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x  & ! input
+    )
+use globalvariables,only:ox2om,o2i
+implicit none
+integer(kind=4),intent(in)::nz
+real(kind=8),dimension(nz),intent(in)::sporo,kom,omx,dz,poro,dif_o2,o2,o2x
+real(kind=8),intent(in)::dt
+real(kind=8),intent(out)::o2dec,o2dif,o2tflx,o2res
+integer(kind=4) iz
 
 o2dec = 0d0 
 o2dif = 0d0
@@ -2060,29 +2166,31 @@ endsubroutine calcflxo2_ox
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine o2calc_sbox()
-use globalvariables,only:iz,nz,row,nsp,ymx,amx,poro,o2,dt,dif_o2,sporo,o2i,dz,kom,ox2om,omx,izox,nmx,infobls,o2x,ipiv
-implicit none 
+! subroutine o2calc_sbox()
+! use globalvariables,only:iz,nz,row,nsp,ymx,amx,poro,o2,dt,dif_o2,sporo,o2i,dz,kom,ox2om,omx,izox,nmx,infobls,o2x,ipiv
+! implicit none 
 
-! subroutine o2calc_sbox(  &
-!     o2x  & ! output
-!     ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
-!     )
-! use globalvariables,only:ox2om,o2i
-! implicit none
-! integer(kind=4),intent(in)::nz,izox
-! real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz,dt
-! real(kind=8),intent(out)::o2x(nz)
-! integer(kind=4) :: ipiv(nz),row,nmx,nsp,iz,infobls
-! real(kind=8) :: amx(nz,nz),ymx(nz),
+subroutine o2calc_sbox(  &
+    o2x  & ! output
+    ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+    )
+use globalvariables,only:ox2om,o2i
+implicit none
+integer(kind=4),intent(in)::nz,izox
+real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz
+real(kind=8),intent(in):: dt
+real(kind=8),intent(out)::o2x(nz)
+integer(kind=4) :: row,nmx,nsp,iz,infobls
+real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:)
+integer(kind=4),allocatable::ipiv(:)
     
-! nsp=1 ! number of species considered here; 1, only om 
-! nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
-! if (allocated(amx)) deallocate(amx)
-! if (allocated(ymx)) deallocate(ymx)
-! if (allocated(emx)) deallocate(emx)
-! if (allocated(ipiv)) deallocate(ipiv)
-! allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
+nsp=1 ! number of species considered here; 1, only om 
+nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
+if (allocated(amx)) deallocate(amx)
+if (allocated(ymx)) deallocate(ymx)
+if (allocated(emx)) deallocate(emx)
+if (allocated(ipiv)) deallocate(ipiv)
+allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
 
 amx = 0d0
 ymx = 0d0
@@ -2157,21 +2265,21 @@ endsubroutine o2calc_sbox
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calcflxo2_sbox()
-use globalvariables,only:o2dec,o2dif,o2tflx,iz,nz,sporo,ox2om,kom,omx,dz,o2x,o2,dt,poro,dif_o2,izox,o2res,o2i
-implicit none 
+! subroutine calcflxo2_sbox()
+! use globalvariables,only:o2dec,o2dif,o2tflx,iz,nz,sporo,ox2om,kom,omx,dz,o2x,o2,dt,poro,dif_o2,izox,o2res,o2i
+! implicit none 
 
-! subroutine calcflxo2_sbox( &
-!     o2dec,o2dif,o2tflx,o2res  & ! output 
-!     ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox  & ! input
-!     )
-! use globalvariables,only:ox2om,o2i
-! implicit none
-! integer(kind=4),intent(in)::nz,izox
-! real(kind=8),dimension(nz),intent(inz)::sporo,kom,omx,dz,poro,dif_o2,o2,o2x
-! real(kind=8),intent(in)::dt
-! real(kind=8),intent(out)::o2dec,o2dif,o2tflx,o2res
-! integer(kind=4) iz
+subroutine calcflxo2_sbox( &
+    o2dec,o2dif,o2tflx,o2res  & ! output 
+    ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox  & ! input
+    )
+use globalvariables,only:ox2om,o2i
+implicit none
+integer(kind=4),intent(in)::nz,izox
+real(kind=8),dimension(nz),intent(in)::sporo,kom,omx,dz,poro,dif_o2,o2,o2x
+real(kind=8),intent(in)::dt
+real(kind=8),intent(out)::o2dec,o2dif,o2tflx,o2res
+integer(kind=4) iz
 
 o2dec = 0d0 
 o2dif = 0d0
@@ -2199,34 +2307,34 @@ endsubroutine calcflxo2_sbox
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calccaco3sys()
-use globalvariables,only: error,itr,nsp,nspcc,nmx,nz,amx,ymx,emx,ipiv,dumx,tol,dicx,alkx,dic,alk,prox,dep,co2x,hco3x,co3x &
-    ,infosbr,sal,temp,dco3_ddic,dco3_dalk,rcc,drcc_dcc,drcc_dco3,drcc_ddic,isp,iz,row,col,sporo,sporoi,sporof,poro,poroi  &
-    ,flg_500,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,trans,iiz,cc,ccx,dic,dicx,alk,alkx,labs,turbo2,nonlocal,fact,n,nnz,ap,ai &
-    ,ax,file_tmp,oxco2,anco2,infobls,kai,bx,cnt2,cnt,symbolic,control,info,numeric,alki,dici,co3sat,ccx_th,kcc,drcc_dalk  &
-    ,ccflx,workdir,ncc,sys,i,j,dt,omega,domega_ddic,domega_dalk,drcc_domega
-implicit none 
-
-! subroutine calccaco3sys(  &
-!     ccx,dicx,alkx,rcc  & ! in&output
-!     ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,trans & ! input
-!     ,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,dt,omega,domega_ddic,domega_dalk,drcc_domega  & ! input
-!     )
-! use globalvariables,only: tol,poroi,flg_500,fact,file_tmp,alki,dici,ccx_th,workdir,i,j,dt,omega,domega_ddic,domega_dalk,drcc_domega
+! subroutine calccaco3sys()
+! use globalvariables,only: error,itr,nsp,nspcc,nmx,nz,amx,ymx,emx,ipiv,dumx,tol,dicx,alkx,dic,alk,prox,dep,co2x,hco3x,co3x &
+    ! ,infosbr,sal,temp,dco3_ddic,dco3_dalk,rcc,drcc_dcc,drcc_dco3,drcc_ddic,isp,iz,row,col,sporo,sporoi,sporof,poro,poroi  &
+    ! ,flg_500,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,trans,iiz,cc,ccx,dic,dicx,alk,alkx,labs,turbo2,nonlocal,fact,n,nnz,ap,ai &
+    ! ,ax,file_tmp,oxco2,anco2,infobls,kai,bx,cnt2,cnt,symbolic,control,info,numeric,alki,dici,co3sat,ccx_th,kcc,drcc_dalk  &
+    ! ,ccflx,workdir,ncc,sys,i,j,dt,omega,domega_ddic,domega_dalk,drcc_domega
 ! implicit none 
-! integer(kind=4),intent(in)::nspcc,nz
-! real(kind=8),dimension(nz),intent(in)::dic,alk,sporo,poro,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,oxco2,anco2,omega
-! real(kind=8),dimension(nz),intent(in)::domega_dalk,domega_ddic
-! real(kind=8),intent(in)::dep,sal,temp,sporoi,sporof,trans(nz,nz,nspcc+2),cc(nz,nspcc),co3sat,kcc(nz,nspcc),ccflx(nspcc)
-! real(kind=8),intent(in)::ncc,dt,drcc_domega(nz,nspcc)
-! logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
-! real(kind=8),intent(inout)::dicx(nz),alkx(nz),ccx(nz,nspcc),rcc(nz,nspcc)
-! integer(kind=4)::itr,nsp,nmx,infosbr,iiz,n,nnz,infobls,cnt2,cnt,sys,numeric,status,isp,iz,row,col,i,j
-! integer(kind=4),allocatable :: ipiv(nz),ap(nz),ai(nz)
-! integer(kind=8) symbolic,numeric
-! real(kind=8)::error,prox(nz),co2x(nz),hco3x(nz),co3x(nz),dco3_ddic(nz),dco3_dalk(nz),drcc_dcc(nz,nspcc)  
-! real(kind=8)::drcc_dco3(nz,nspcc),drcc_ddic(nz,nspcc),drcc_dalk(nz,nspcc),info(90),control(20),drcc_dalk(nz,nspcc)
-! real(kind=8),allocatable :: amx(nz,nz),ymx(nz),emx(nz),dumx(nz),ax(nz),kai(nz),bx(nz),
+
+subroutine calccaco3sys(  &
+    ccx,dicx,alkx,rcc,dt  & ! in&output
+    ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic & ! input
+    ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz  & ! input
+    )
+use globalvariables,only: tol,poroi,flg_500,fact,file_tmp,alki,dici,ccx_th,workdir
+implicit none 
+integer(kind=4),intent(in)::nspcc,nz
+real(kind=8),dimension(nz),intent(in)::dic,alk,sporo,poro,dif_alk,dif_dic,w,up,dwn,cnr,adf,dz,oxco2,anco2
+real(kind=8),intent(in)::dep,sal,temp,sporoi,sporof,trans(nz,nz,nspcc+2),cc(nz,nspcc),co3sat,kcc(nz,nspcc),ccflx(nspcc)
+real(kind=8),intent(in)::ncc
+logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
+real(kind=8),intent(inout)::dicx(nz),alkx(nz),ccx(nz,nspcc),rcc(nz,nspcc),dt
+integer(kind=4)::itr,nsp,nmx,infosbr,iiz,n,nnz,infobls,cnt2,cnt,sys,status,isp,iz,row,col,i,j
+integer(kind=4),allocatable :: ipiv(:),ap(:),ai(:)
+integer(kind=8) symbolic,numeric
+real(kind=8)::error,prox(nz),co2x(nz),hco3x(nz),co3x(nz),dco3_ddic(nz),dco3_dalk(nz),drcc_dcc(nz,nspcc)  
+real(kind=8)::drcc_dco3(nz,nspcc),drcc_ddic(nz,nspcc),drcc_dalk(nz,nspcc),info(90),control(20)
+real(kind=8)::drcc_domega(nz,nspcc),domega_dalk(nz),domega_ddic(nz),omega(nz)
+real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:),dumx(:,:),ax(:),kai(:),bx(:)
 
 !       Here the system is non-linear and thus Newton's method is used (e.g., Steefel and Lasaga, 1994).
 ! 
@@ -2802,33 +2910,33 @@ endsubroutine calccaco3sys
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calcflxcaco3sys()
-use globalvariables,only:cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,dictflx,dicdis,dicdif,dicres,alktflx,alkdis  &
-    ,alkdif,alkdec,alkres,iz,nz,row,nsp,isp,nspcc,poro,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic  &
-    ,dicx,alk,alkx,dici,alki,oxco2,anco2,trans,iiz,col,sporo,turbo2,labs,nonlocal,file_err,ccres  &
-    ,sporof,tol,dw,dicdec,mvcc,it
-implicit none 
-
-! subroutine calcflxcaco3sys(  &
-!      cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres & ! output
-!      ,dictflx,dicdis,dicdif,dicres,dicdec   & ! output
-!      ,dw & ! inoutput
-!      ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
-!      ,turbo2,labs,nonlocal,sporof,it        & ! input
-!      )
-! use globalvariables,only:dici,alki,file_err,mvcc,tol
+! subroutine calcflxcaco3sys()
+! use globalvariables,only:cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,dictflx,dicdis,dicdif,dicres,alktflx,alkdis  &
+    ! ,alkdif,alkdec,alkres,iz,nz,row,nsp,isp,nspcc,poro,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic  &
+    ! ,dicx,alk,alkx,dici,alki,oxco2,anco2,trans,iiz,col,sporo,turbo2,labs,nonlocal,file_err,ccres  &
+    ! ,sporof,tol,dw,dicdec,mvcc,it
 ! implicit none 
-! integer(kind=4),intent(in)::nz,nspcc,it
-! real(kind=8),dimension(nz),intent(in)::poro,dz,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2
-! real(kind=8),dimension(nz),intent(in)::sporo
-! real(kind=8),intent(in)::ccx(nz,nspcc),cc(nz,nspcc),dt,rcc(nz,nspcc),trans(nz,nz,nspcc+2),sporof
-! real(kind=8),intent(inout)::dw(nz)
-! logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
-! real(kind=8),dimension(nspcc),intent(out)::cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres
-! real(kind=8),intent(out)::dictflx,dicdis,dicdif,dicres,alktflx,alkdis,alkdif,alkdec,alkres,dicdec
-! integer(kind=4)::iz,row,nsp,isp,iiz,col
-!
-! nsp = nspcc+2
+
+subroutine calcflxcaco3sys(  &
+     cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres & ! output
+     ,dictflx,dicdis,dicdif,dicres,dicdec   & ! output
+     ,dw & ! inoutput
+     ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
+     ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo        & ! input
+     )
+use globalvariables,only:dici,alki,file_err,mvcc,tol
+implicit none 
+integer(kind=4),intent(in)::nz,nspcc,it
+real(kind=8),dimension(nz),intent(in)::poro,dz,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2
+real(kind=8),dimension(nz),intent(in)::sporo
+real(kind=8),intent(in)::ccx(nz,nspcc),cc(nz,nspcc),dt,rcc(nz,nspcc),trans(nz,nz,nspcc+2),sporof
+real(kind=8),intent(inout)::dw(nz)
+logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
+real(kind=8),dimension(nspcc),intent(out)::cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres
+real(kind=8),intent(out)::dictflx,dicdis,dicdif,dicres,alktflx,alkdis,alkdif,alkdec,alkres,dicdec
+integer(kind=4)::iz,row,nsp,isp,iiz,col
+
+nsp = nspcc+2
 
 cctflx =0d0 
 ccdis = 0d0 
@@ -2966,24 +3074,26 @@ endsubroutine calcflxcaco3sys
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine claycalc()
-use globalvariables,only:error,itr,nsp,nmx,amx,ymx,iz,nz,row,sporo,pt,dt,w,dz,detflx,msed,adf,up,dwn,cnr &
-    ,trans,iiz,labs,turbo2,nonlocal,file_tmp,poro,sporof,ptx,ipiv,infobls,col,emx,workdir
-implicit none
-
-! subroutine claycalc(  &   
-!     ptx                  &  ! in&output
-!     ,nz,sporo,pt,dt,w,dz,detflx,adf,up,dwn,cnr,trans,nspcc,labs,turbo2,nonlocal,poro,     &  !  intput
-!     )
-! use globalvariables,only:msed,file_tmp,workdir
+! subroutine claycalc()
+! use globalvariables,only:error,itr,nsp,nmx,amx,ymx,iz,nz,row,sporo,pt,dt,w,dz,detflx,msed,adf,up,dwn,cnr &
+    ! ,trans,iiz,labs,turbo2,nonlocal,file_tmp,poro,sporof,ptx,ipiv,infobls,col,emx,workdir
 ! implicit none
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),dimension(nz),intent(in)::sporo,pt,w,dz,adf,up,dwn,cnr,poro
-! real(kind=8),intent(in)::dt,detflx,trans(nz,nz,nspcc+2),sporof
-! integer,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
-! real(kind=8),intent(inout)::ptx
-! integer(kind=4)::error,itr,nsp,nmx,iz,row,iiz,ipiv(nz),infobls,col
-! real(kind=8),allocatable::amx(nz,nz),ymx(nz),emx(nz)
+
+subroutine claycalc(  &   
+    ptx                  &  ! output
+    ,nz,sporo,pt,dt,w,dz,detflx,adf,up,dwn,cnr,trans  &  ! input
+    ,nspcc,labs,turbo2,nonlocal,poro,sporof     &  !  intput
+    )
+use globalvariables,only:msed,file_tmp,workdir
+implicit none
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),dimension(nz),intent(in)::sporo,pt,w,dz,adf,up,dwn,cnr,poro
+real(kind=8),intent(in)::dt,detflx,trans(nz,nz,nspcc+2),sporof
+logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
+real(kind=8),intent(out)::ptx(nz)
+integer(kind=4)::error,itr,nsp,nmx,iz,row,iiz,infobls,col
+integer(kind=4),allocatable::ipiv(:)
+real(kind=8),allocatable::amx(:,:),ymx(:),emx(:)
 
 error = 1d4
 itr = 0
@@ -3106,25 +3216,25 @@ endsubroutine claycalc
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine calcflxclay()
-use globalvariables,only:pttflx,ptdif,ptadv,ptres,ptrain,iz,nz,row,nsp,sporo,ptx,pt,dt,dz,detflx,msed  &
-    ,w,adf,up,dwn,cnr,sporof,col,iiz,trans,turbo2,labs,nonlocal,dw,mvsed,poro
-implicit none 
-
-! subroutine calcflxclay( &
-!     pttflx,ptdif,ptadv,ptres,ptrain  & ! output
-!     ,dw          &  ! in&output
-!     ,nz,sporo,ptx,pt,dt,dz,detflx,w,adf,up,dwn,cnr,sporof,trans,nspcc,turbo2,labs,nonlocal,poro           &  !  input
-!     )
-! use globalvariables,only:msed,mvsed
+! subroutine calcflxclay()
+! use globalvariables,only:pttflx,ptdif,ptadv,ptres,ptrain,iz,nz,row,nsp,sporo,ptx,pt,dt,dz,detflx,msed  &
+    ! ,w,adf,up,dwn,cnr,sporof,col,iiz,trans,turbo2,labs,nonlocal,dw,mvsed,poro
 ! implicit none 
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),dimension(nz),intent(in)::sporo,ptx,pt,dz,w,adf,up,dwn,cnr,poro
-! real(kind=8),intent(in)::dt,detflx,sporof,trans(nz,nz,nspcc+2)
-! logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
-! real(kind=8),intent(inout)::dw
-! real(kind=8),intent(out)::pttflx,ptdif,ptadv,ptres,ptrain
-! integer(kind=4)::iz,row,nsp=1,col,iiz
+
+subroutine calcflxclay( &
+    pttflx,ptdif,ptadv,ptres,ptrain  & ! output
+    ,dw          &  ! in&output
+    ,nz,sporo,ptx,pt,dt,dz,detflx,w,adf,up,dwn,cnr,sporof,trans,nspcc,turbo2,labs,nonlocal,poro           &  !  input
+    )
+use globalvariables,only:msed,mvsed
+implicit none 
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),dimension(nz),intent(in)::sporo,ptx,pt,dz,w,adf,up,dwn,cnr,poro
+real(kind=8),intent(in)::dt,detflx,sporof,trans(nz,nz,nspcc+2)
+logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
+real(kind=8),intent(inout)::dw(nz)
+real(kind=8),intent(out)::pttflx,ptdif,ptadv,ptres,ptrain
+integer(kind=4)::iz,row,nsp=1,col,iiz
 
 pttflx = 0d0 
 ptdif = 0d0 
@@ -3187,20 +3297,21 @@ endsubroutine calcflxclay
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine getsldprop()
-use globalvariables,only:iz,nz,rho,omx,mom,ptx,msed,ccx,mcc,frt,mvom,mvsed,mvcc,file_tmp,workdir,w,up,dwn,cnr,adf,z
-implicit none 
-
-! subroutine getsldprop(  &
-!     rho,frt,       &  ! output
-!     nz,omx,ptx,ccx,nspcc,w,up,dwn,cnr,adf,z      & ! input)
-! use globalvariables,only:mom,msed,mcc,mvom,mvsed,mvcc,file_tmp,workdir,
+! subroutine getsldprop()
+! use globalvariables,only:iz,nz,rho,omx,mom,ptx,msed,ccx,mcc,frt,mvom,mvsed,mvcc,file_tmp,workdir,w,up,dwn,cnr,adf,z
 ! implicit none 
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),dimension(nz),intent(in)::omx,ptx,w,up,dwn,cnr,adf,z
-! real(kind=8),intent(in)::ccx(nz,nz,nspcc)
-! real(kind=8),intent(out)::rho(nz),frt(nz)
-! integer(kind=4)::iz
+
+subroutine getsldprop(  &
+    rho,frt,       &  ! output
+    nz,omx,ptx,ccx,nspcc,w,up,dwn,cnr,adf,z      & ! input
+    )
+use globalvariables,only:mom,msed,mcc,mvom,mvsed,mvcc,file_tmp,workdir
+implicit none 
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),dimension(nz),intent(in)::omx,ptx,w,up,dwn,cnr,adf,z
+real(kind=8),intent(in)::ccx(nz,nspcc)
+real(kind=8),intent(out)::rho(nz),frt(nz)
+integer(kind=4)::iz
 
 do iz=1,nz 
     rho(iz) = omx(iz)*mom + ptx(iz)*msed +  sum(ccx(iz,:))*mcc  ! calculating bulk density 
@@ -3222,20 +3333,20 @@ endsubroutine getsldprop
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine burialcalc()
-use globalvariables,only:wi,detflx,msed,mvsed,ccflx,mvcc,omflx,mvom,poroi,iz,nz,w,dw,dz,poro
-implicit none
-
-! subroutine burialcalc(  &
-!     w,wi,         & !  output
-!     ,detflx,ccflx,nspcc,omflx,dw,dz,poro    & ! input
-!     )
-! use globalvariables,only:msed,mvsed,mvcc,mvom,poroi
+! subroutine burialcalc()
+! use globalvariables,only:wi,detflx,msed,mvsed,ccflx,mvcc,omflx,mvom,poroi,iz,nz,w,dw,dz,poro
 ! implicit none
-! integer(kind=4),intent(in)::nz,nspcc
-! real(kind=8),intent(in)::detflx,ccflx(nspcc),omflx,dw(nz),dz(nz),poro(nz)
-! real(kind=8),intent(out)::wi,w(nz)
-! integer(kind=4)::iz
+
+subroutine burialcalc(  &
+    w,wi        & !  output
+    ,detflx,ccflx,nspcc,omflx,dw,dz,poro,nz    & ! input
+    )
+use globalvariables,only:msed,mvsed,mvcc,mvom,poroi
+implicit none
+integer(kind=4),intent(in)::nz,nspcc
+real(kind=8),intent(in)::detflx,ccflx(nspcc),omflx,dw(nz),dz(nz),poro(nz)
+real(kind=8),intent(out)::wi,w(nz)
+integer(kind=4)::iz
 
 ! w is up dated by solving 
 !           d(1 - poro)*w/dz = dw
