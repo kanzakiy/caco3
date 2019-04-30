@@ -1,0 +1,12 @@
+Memo to use mocsy 
+Install
+Follow the intruction at http://ocmip5.ipsl.jussieu.fr/mocsy/fort.html
+
+Compile
+0) Switch on "mocsy" and "USE_PRECISION=2" in defines.h
+1) compile subroutine to call mocsy: gfortran -ffree-line-length-none -fPIC -cpp -DUSE_PRECISION=2 -I/path/to/mocsy/directory -c call_mocsy.f90 -o call_mocsy.o
+2) compile subroutines for diagenesis & signal tracking:  gfortran -c -cpp -I/path/to/working/directory caco3_test_mod_v5_6.f90
+3) compile 1 & 2: gfortran -ffree-line-length-none -fPIC -cpp -I/path/to/working/directory chk_sbrtns.f90 caco3_test_mod_v5_6.o caco3_therm.o call_mocsy.o -lopenblas -lmocsy -L/path/to/mocsy/directory
+
+Run
+Type './a.exe rr ...' or './a.out rr ...'. See readme.txt for the input (rr ...) you can specify when running the code. 
