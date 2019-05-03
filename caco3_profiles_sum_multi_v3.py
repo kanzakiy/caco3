@@ -3,6 +3,7 @@ import numpy as np
 import subprocess
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import math
 
 """
 caco3 profiles - simple ver.  
