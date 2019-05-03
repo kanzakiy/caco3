@@ -16,26 +16,26 @@ from matplotlib.colors import Normalize
 """
 caco3 profiles - simple ver.  
 """
-Workdir = "C:/cygwin64/home/YK/caco3/"
+Workdir = "C:/cygwin64/home/YK/caco3/"  # where result files exist; figures are stored in the same file out of my laziness 
 
-nt = 10
-nz = 100
-nsp = 4
-dt = 100.
+nt = 10  # total number of time iteration 
+nz = 100 # grid number 
+nsp = 4  # caco3 species number 
+dt = 100.  # time step [yr]
 
 numstr = np.empty((nt),dtype='|S5')
 
 for i in range(nt):
     numstr[i] = '{:03d}'.format(i+1)
 
-pt = np.empty((nt,nz,6),dtype=np.float)
-cc = np.empty((nt,nz,8),dtype=np.float)
+pt = np.empty((nt,nz,6),dtype=np.float)  # clay data 
+cc = np.empty((nt,nz,8),dtype=np.float)  # caco3 system data 
 
-om = np.empty((nt,nz,3),dtype=np.float)
-o2 = np.empty((nt,nz,5),dtype=np.float)
+om = np.empty((nt,nz,3),dtype=np.float)  # om 
+o2 = np.empty((nt,nz,5),dtype=np.float)  # o2
 
-ccsp = np.empty((nt,nz,nsp+2),dtype=np.float)
-sig = np.empty((nt,nz,4),dtype=np.float)
+ccsp = np.empty((nt,nz,nsp+2),dtype=np.float)  # individual caco3 species 
+sig = np.empty((nt,nz,4),dtype=np.float)  # proxy signal data (not used)
 
 
 for i in range(nt):
@@ -46,8 +46,9 @@ for i in range(nt):
     ccsp[i,:,:]=np.loadtxt(Workdir+'ccx_sp-'+numstr[i]+".txt")
     sig[i,:,:]=np.loadtxt(Workdir+'sig-'+numstr[i]+".txt")
 
-print 'end input'
+print 'end input'  # finished reading 
 
+# plotting format 
 plt.rcParams['font.family'] = 'Arial' 
 plt.rcParams['font.size'] = 16
 
@@ -76,16 +77,16 @@ plt.tick_params(top=True)
 plt.tick_params(right=True)
 
 
-fs=12
+fs=12 # fontsize 
 
-nx = 3
-ny =5
+nx = 3  # column number of plot 
+ny =5  # row number of plot 
 
-tx = 0.5
-ty = 0.8
+tx = 0.5  # parameter for location of text within plot 
+ty = 0.8  # the same as above 
 
-color=cm.jet(np.linspace(0,1,nt))
-label = np.empty((nt),dtype='|S15')
+color=cm.jet(np.linspace(0,1,nt))  # color according to time 
+label = np.empty((nt),dtype='|S15')  # making labels according to time 
 for i in range(nt):
     label[i]=str(i*dt/1e3)+' kyr'
 
@@ -356,8 +357,9 @@ ax1.set_yscale('log')
 
 ##fig.tight_layout()
 fig.subplots_adjust(left=0.1,bottom=0.1,wspace=0.06,hspace=0.2)
-outfilename = Workdir+"caco3_model_sum.svg"
+outfilename = Workdir+"caco3_model_sum.svg" # you can modify the fig name and location 
 plt.savefig(outfilename, transparent=True)
+# if you do not have inkscape comment out the following three lines 
 subprocess.call('"C:\Program Files\Inkscape\inkscape.exe" -z -f ' \
                 + outfilename + ' --export-emf '+outfilename+\
                 '.emf',shell=True)
@@ -468,6 +470,7 @@ ax1.set_xlim(-6,-2)
 fig.subplots_adjust(left=0.1,bottom=0.1,wspace=0.06,hspace=0.2)
 outfilename = Workdir+"caco3_model_sum_multi.svg"
 plt.savefig(outfilename, transparent=True)
+# if you do not have inkscape comment out the following three lines 
 subprocess.call('"C:\Program Files\Inkscape\inkscape.exe" -z -f ' \
                 + outfilename + ' --export-emf '+outfilename+\
                 '.emf',shell=True)
