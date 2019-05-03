@@ -1,17 +1,8 @@
 # -*- coding: utf-8 -*-
-from mpl_toolkits.basemap import Basemap
 import numpy as np
-import pandas as pd
-import math
 import subprocess
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from netCDF4 import Dataset
-import matplotlib.ticker as ticker
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.colors import LogNorm
-import numpy.ma as ma
-from matplotlib.colors import Normalize
 
 """
 caco3 profiles - simple ver.  
