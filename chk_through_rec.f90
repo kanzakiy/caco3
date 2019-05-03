@@ -148,8 +148,8 @@ do it=1,nt
         ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
         ! call calcflxom()
         call calcflxom(  &
-            omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
-            ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+            omadv,omdec,omdif,omrain,omres,omtflx  & ! output 
+            ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc,omflx  & ! input 
             )
         
         ! print*,'~~~~ conc ~~~~'
