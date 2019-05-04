@@ -7,7 +7,7 @@ implicit none
 #include <defines.h>
 integer(kind=4),parameter :: nz = 100  ! grid number 
 #ifdef sense
-integer(kind=4),parameter :: nspcc = 1  ! number of CaCO3 species 
+integer(kind=4),parameter :: nspcc = 12  ! number of CaCO3 species 
 #elif defined track2
 integer(kind=4),parameter :: nspcc = 42
 #elif defined size
@@ -116,7 +116,7 @@ real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:) ! amx and ymx correspond to A
 integer(kind=4),allocatable :: ipiv(:),dumx(:,:) ! matrix used to solve linear system Ax = B 
 integer(kind=4) infobls, infosbr  ! variables used to tell errors when calling a subroutine to solve matrix 
 real(kind=8) error, error2, minerr  !  errors in iterations and minimum error produced 
-real(kind=8) :: tol = 1d-6  ! tolerance of error 
+real(kind=8) :: tol = 1d-12  ! tolerance of error 
 integer(kind=4) iz, row, col, itr  , it, iiz, itr_w, itr_f ! integers for sediment grid, matrix row and col and iteration numbers 
 integer(kind=4) cntsp  ! counting caco3 species numbers 
 integer(kind=4) izrec, izrec2  ! grid number where signal is read 
@@ -336,7 +336,8 @@ call coefs(  &
     )
 
 !!   INITIAL CONDITIONS !!!!!!!!!!!!!!!!!!! 
-cc = 1d-8   ! assume an arbitrary low conc. 
+! cc = 1d-8   ! assume an arbitrary low conc. 
+cc = 0.9d0/(mcc/rhocc)   ! assume 90 wt%  
 dic = dici*1d-6/1d3 ! mol/cm3; factor is added to change uM to mol/cm3 
 alk = alki*1d-6/1d3 ! mol/cm3
 
@@ -420,6 +421,12 @@ do
         ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
         )
     !! /////////////////////
+#ifdef sense
+    ! call coefs(  &
+        ! dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
+        ! ,temp,sal,min(dep*time/(0.5d0*time_spn),dep),nz,nspcc,poro,cai  & !  input 
+        ! )
+#endif 
 
 #ifndef nonrec 
     if (it==1) then    !! recording boundary conditions 
@@ -479,8 +486,8 @@ do
         ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
         ! call calcflxom()
         call calcflxom(  &
-            omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
-            ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+            omadv,omdec,omdif,omrain,omres,omtflx  & ! output 
+            ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc,omflx  & ! input 
             )
         !~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -638,6 +645,7 @@ do
          ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
          ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo        & ! input
          )
+    ! if (flg_500) go to 500
 
 #ifndef nonrec
     if (it==1) then 
@@ -1198,6 +1206,7 @@ enddo
 #ifdef sense
 time_trs = 0d0   !  there is no event needed 
 time_aft = 0d0 
+! time_spn = 2d0*time_spn  ! first run without dissolution 
 do itrec=1,nrec
     rectime(itrec)=itrec*time_spn/real(nrec)
 enddo
@@ -1930,8 +1939,8 @@ endsubroutine omcalc
 ! implicit none 
 
 subroutine calcflxom(  &
-    omadv,omdec,omdif,omrain,omflx,omres,omtflx  & ! output 
-    ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc  & ! input 
+    omadv,omdec,omdif,omrain,omres,omtflx  & ! output 
+    ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc,omflx  & ! input 
     )
 use globalvariables, only:file_tmp,workdir 
 implicit none 
@@ -2924,7 +2933,7 @@ subroutine calcflxcaco3sys(  &
      ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
      ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo        & ! input
      )
-use globalvariables,only:dici,alki,file_err,mvcc,tol
+use globalvariables,only:dici,alki,file_err,mvcc,tol,flg_500
 implicit none 
 integer(kind=4),intent(in)::nz,nspcc,it
 real(kind=8),dimension(nz),intent(in)::poro,dz,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2
@@ -3059,15 +3068,21 @@ ccres = cctflx +  ccdis +  ccdif + ccadv + ccrain
 dicres = dictflx + dicdis + dicdif + dicdec 
 alkres = alktflx + alkdis + alkdif + alkdec 
 
+flg_500 = .false.
+! #ifdef sense
 ! if (abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec) > tol*10d0) then   ! if residual fluxes are relatively large, record just in case  
     ! print*,'not enough accuracy in co2 calc:stop',abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec)
     ! write(file_err,*)it,'not enough accuracy in co2 calc:stop',abs(alkres)/max(alktflx,alkdis ,alkdif , alkdec)  &
         ! ,alkres, alktflx,alkdis , alkdif , alkdec 
+    ! flg_500 = .true.
+! endif
+! #endif 
         
 if (abs(alkres)/maxval(abs(ccflx)) > tol*10d0) then   ! if residual fluxes are relatively large, record just in case  
     print*,'not enough accuracy in co2 calc:stop',abs(alkres)/maxval(abs(ccflx))
     write(file_err,*)it,'not enough accuracy in co2 calc:stop',abs(alkres)/maxval(abs(ccflx))  &
         ,alkres, alktflx,alkdis , alkdif , alkdec 
+    flg_500 = .true.
 endif
 
 endsubroutine calcflxcaco3sys 
