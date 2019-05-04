@@ -123,7 +123,7 @@ integer(kind=4) :: nt = 1000000  ! maximum interation for time (do not have to b
 integer(kind=4),parameter :: nrec = 15  ! total recording time of sediment profiles 
 integer(kind=4) cntrec, itrec  ! integers used for counting recording time 
 integer(kind=4) :: izox_minerr =0  ! grid number where error in zox is minimum 
-real(kind=4) up(nz), dwn(nz), cnr(nz) ! advection calc. schemes; up or down wind, or central schemes if 1
+real(kind=8) up(nz), dwn(nz), cnr(nz) ! advection calc. schemes; up or down wind, or central schemes if 1
 real(kind=8) adf(nz)  ! factor to make sure mass conversion 
 real(kind=8) :: time, dt = 1d2  ! time and time step 
 real(kind=8) rectime(nrec), time_max ! recording time and maximum time 
@@ -156,6 +156,7 @@ logical :: nobio(nspcc+2) = .false.  ! no biogenic reworking assumed
 logical :: turbo2(nspcc+2) = .false.  ! random mixing 
 logical :: labs(nspcc+2) = .false.  ! mixing info from LABS 
 logical :: nonlocal(nspcc+2)  ! ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
+logical izox_calc_done ! 2019-May-1 YK added switched on when izox calculation is done 
 real(kind=8) :: calceqcc, calceqag  ! functions in caco3_therm.f90 
 real(kind=8), parameter :: pi=4.0d0*atan(1.0d0) ! 
 ! when using sparse matrix solver 
@@ -947,15 +948,17 @@ minerr= 1d4  ! recording minimum relative difference in zox from previously cons
 do while (error > tol)
 
 !~~~~~~ OM calculation ~~~~~~~~~~~~~~~~~
-
+izox_calc_done = .false.
 if (oxic) then 
     do iz=1,nz
         if (o2x(iz) > o2th) then
             kom(iz) = komi
-            izox = iz
+            ! izox = iz
+            if (.not. izox_calc_done) izox = iz  ! updating izox as long as o2x > o2th
         else! unless anoxi degradation is allowed, om cannot degradate below zox
             kom(iz) = 0d0
             if (anoxic) kom(iz) = komi 
+            izox_calc_done = .true. ! once o2x becomes less than o2th, izox does not need be updated  
         endif
     enddo
 endif
