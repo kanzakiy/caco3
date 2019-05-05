@@ -1413,9 +1413,9 @@ def make_transmx(
 
 def recordprofile(itrec 
     ,nz,z,age,pt,ptx,msed,w,wi,rho,frt 
-    ,cc,mcc,dic,alk,co3,co3sat,rcc,pro,dicx,alkx,co3x,prox 
+    ,cc,mcc,dic,alk,co3,co3sat,rcc,pro,dicx,alkx,co3x,prox,nspcc
     ,o2x,oxco2,anco2
-    ,om,mom
+    ,om,omx,mom
     ,ccx
     ,d13c_ocni,d18o_ocni,d13c_blk,d18o_blk
     ,up,dwn,cnr,adf
@@ -1452,32 +1452,32 @@ def recordprofile(itrec
             print >> file_tmp,z[iz],age[iz],w[iz],up[iz],dwn[iz],cnr[iz],adf[iz]
         file_tmp.close()
     else:
-        file_tmp = open(workdir+'ptx-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'ptx-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp,z[iz],age[iz],ptx[iz]*msed/rho[iz]*100e0,rho[iz],frt[iz]  ,w[iz]
         file_tmp.close()
-        file_tmp = open(workdir+'ccx-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'ccx-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp, z[iz],age[iz],np.sum(ccx[iz,:])*mcc/rho[iz]*100e0, dicx[iz]*1e3, alkx[iz]*1e3  \
                 , co3x[iz]*1e3-co3sat, np.sum(rcc[iz,:]),-np.log10(prox[iz]) 
         file_tmp.close()
-        file_tmp = open(workdir+'omx-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'omx-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp,z[iz],age[iz],omx[iz]*mom/rho[iz]*100e0
         file_tmp.close()
-        file_tmp = open(workdir+'o2x-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'o2x-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp,z[iz],age[iz],o2x[iz]*1e3, oxco2[iz], anco2[iz]
         file_tmp.close()
-        file_tmp = open(workdir+'ccx_sp-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'ccx_sp-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp,z[iz],age[iz],ccx[iz,0:nspcc]*mcc/rho[iz]*100e0
         file_tmp.close()
-        file_tmp = open(workdir+'sig-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'sig-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp,z[iz],age[iz],d13c_blk[iz],d18o_blk[iz]
         file_tmp.close()
-        file_tmp = open(workdir+'bur-'+ '{:03}'.format(cntrec+1)+'.txt','w') 
+        file_tmp = open(workdir+'bur-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             print>>file_tmp,z[iz],age[iz],w[iz],up[iz],dwn[iz],cnr[iz],adf[iz]
         file_tmp.close()
@@ -1896,9 +1896,9 @@ def main():
     # recording
     recordprofile(0 
         ,nz,z,age,pt,ptx,msed,w,wi,rho,frt 
-        ,cc,mcc,dic,alk,co3,co3sat,rcc,pro,dicx,alkx,co3x,prox 
+        ,cc,mcc,dic,alk,co3,co3sat,rcc,pro,dicx,alkx,co3x,prox,nspcc
         ,o2x,oxco2,anco2
-        ,om,mom
+        ,om,omx,mom
         ,ccx
         ,d13c_ocni,d18o_ocni,d13c_blk,d18o_blk
         ,up,dwn,cnr,adf
@@ -2164,9 +2164,9 @@ def main():
         if time>=rectime[cntrec]: 
             recordprofile(cntrec+1 
                 ,nz,z,age,pt,ptx,msed,w,wi,rho,frt 
-                ,cc,mcc,dic,alk,co3,co3sat,rcc,pro,dicx,alkx,co3x,prox 
+                ,cc,mcc,dic,alk,co3,co3sat,rcc,pro,dicx,alkx,co3x,prox,nspcc
                 ,o2x,oxco2,anco2
-                ,om,mom
+                ,om,omx,mom
                 ,ccx
                 ,d13c_ocni,d18o_ocni,d13c_blk,d18o_blk
                 ,up,dwn,cnr,adf
