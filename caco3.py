@@ -639,7 +639,7 @@ def calccaco3sys(  #
     ccx,dicx,alkx,rcc,dt  # in&output
     ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic # input
     ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz,tol,sparse,fact  # input
-    ,dici,alki,ccx_th,showiter
+    ,dici,alki,ccx_th,showiter,w_pre
     ):
     drcc_dco3=np.zeros((nz,nspcc),dtype=np.float64)
     drcc_dcc=np.zeros((nz,nspcc),dtype=np.float64)
@@ -1065,7 +1065,7 @@ def calccaco3sys(  #
             print 'nan alk, stop'
             print alkx
             input()
-    return ccx,dicx,alkx,rcc,dt,flg_restart
+    return ccx,dicx,alkx,rcc,dt,flg_restart,w
     
 def calcflxcaco3sys(  
     dw # inoutput
@@ -1485,10 +1485,10 @@ def recordprofile(itrec
     
 def timestep(time,time_spn,time_trs,time_aft
     ,nt_spn,nt_trs,nt_aft
-    ,flg_restart
+    ,flg_restart,dt
     ):
     if time <= time_spn:
-        dt=time_spn/np.float64(nt_spn)
+        # dt=time_spn/np.float64(nt_spn)
         if not flg_restart:
             if time+dt>time_spn:
                 dt=time_trs/np.float64(nt_trs)
@@ -1502,7 +1502,7 @@ def timestep(time,time_spn,time_trs,time_aft
 
 def signal_flx(time,time_spn,time_trs,time_aft
     ,d13c_ocni,d18o_ocni,d13c_ocnf,d18o_ocnf,ccflxi,ccflx,track2,size,biotest
-    ,d13c_sp,d18o_sp
+    ,d13c_sp,d18o_sp,flxfini,flxfinf,nspcc
     ):
     if time <= time_spn:
         d13c_ocn = d13c_ocni
@@ -1913,11 +1913,11 @@ def main():
         if not sense:
             dt = timestep(time,time_spn,time_trs,time_aft
                 ,nt_spn,nt_trs,nt_aft
-                ,flg_restart
+                ,flg_restart,dt
                 ) 
             d13c_ocn,d18o_ocn,d13c_sp,d18o_sp,ccflx = signal_flx(time,time_spn,time_trs,time_aft
                 ,d13c_ocni,d18o_ocni,d13c_ocnf,d18o_ocnf,ccflxi,ccflx,track2,size,biotest
-                ,d13c_sp,d18o_sp
+                ,d13c_sp,d18o_sp,flxfini,flxfinf,nspcc
                 )
             dep = bdcnd(time,time_spn,time_trs,time_aft,depi,biotest,depf)
         else:
@@ -2048,11 +2048,11 @@ def main():
             for iz in range(nz):
                 if omx[iz]<omx_th: omx[iz]=omx_th  ## truncated at minimum value 
             ##  ~~~~~~~~~~~~~~~~~~~~~~ CaCO3 solid, ALK and DIC  calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            ccx,dicx,alkx,rcc,dt,flg_restart = calccaco3sys(  #
+            ccx,dicx,alkx,rcc,dt,flg_restart,w = calccaco3sys(  #
                 ccx,dicx,alkx,rcc,dt  # in&output
                 ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic # input
                 ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz,tol,sparse,fact 
-                ,dici,alki,ccx_th,showiter  # input
+                ,dici,alki,ccx_th,showiter,w_pre  # input
                 )
             # ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
             # update aqueous co2 species 
