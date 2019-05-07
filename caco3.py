@@ -7,7 +7,7 @@ import os
 from scipy.sparse import lil_matrix,csr_matrix
 from scipy.sparse.linalg import spsolve
 
-np.set_printoptions(precision=2)
+np.set_printoptions(formatter={'float': '{:.2e}'.format})
 
 def calceq1(tmp,sal,dep):
     tmp_k=np.float64(tmp+273.15)
@@ -1940,7 +1940,7 @@ def main():
             print >> file_bound, '#time  d13c_ocn  d18o_ocn, fluxes of cc:'\
                   ,np.linspace(1,nspcc,nspcc),'temp  dep  sal  dici  alki  o2i'
         if not size:
-            print>> file_bound, time, d13c_ocn, d18o_ocn, ccflx[:]\
+            print>> file_bound, time, d13c_ocn, d18o_ocn, str(ccflx)[1:-1]\
                     ,temp, dep, sal,dici,alki, o2i
         else:
             print>> file_bound, time, d13c_ocn, d18o_ocn\
