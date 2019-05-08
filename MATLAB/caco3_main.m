@@ -19,10 +19,11 @@ classdef caco3_main
     % ===================================
     properties (Constant)
         
-        nspcc = 4;          % number of CaCO3 species
-        nz = 100;  % grid number
+        nspcc = 4;      % number of CaCO3 species
+        nz = 100;       % grid number
         ztot=500.0d0;   % cm , total sediment thickness
-        tol = 1d-6;      %% tolerance of error
+        tol = 1d-6;     % tolerance of error
+        nrec = 15;      % total recording time of sediment profiles
         
         %% Constants
         cai = 10.3d-3;      % mol kg-1 calcium conc. seawater
@@ -65,6 +66,7 @@ classdef caco3_main
         def_nonrec = false;       % define not recording profiles?
         def_sparse = false;       % using sparse matrix solve (you need UMFPACK)
         def_showiter = true;      % show co2 iterations & error in calccaco3sys
+        def_track2 = false;         % using method2 to track signals (default 42 species)
         %        kcci = 10.0d0*365.25d0      % /yr; a reference caco3 dissolution rate const.
         kcci = 1d0*365.25d0         % /yr; cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
         %        kcci = 0d0*365.25d0        % /yr; no dissolution
@@ -1757,6 +1759,268 @@ classdef caco3_main
             
         end
         
+        function recordprofile(itrec, nz,z,age,pt,msed,wi,rho,cc,ccx,dic,dicx,alk,alkx,co3,co3x,co3sat ...
+                ,rcc,pro,o2x,oxco2,anco2,om,mom,mcc,d13c_ocni,d18o_ocni,up,dwn,cnr,adf,nspcc,ptx,w,frt,prox,omx,d13c_blk,d18o_blk)
+            %% write sediment profiles in files
+            
+            if (itrec==0)
+                %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_ptx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi);
+                end
+                fclose(file_tmp);
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_ccx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
+                    %                 , sum(rcc(iz,:)),-log10(pro(iz))
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat, sum(rcc(iz,:)),-log10(pro(iz) ));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_o2x-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_omx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),om(iz)*mom/2.5d0*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_ccx_sp-%3.3i.txt',itrec);
+                fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
+                    fprintf(file_tmp,fmt,z(iz), age(iz),cc(iz,:)*mcc/2.5d0*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_sig-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),d13c_ocni,d18o_ocni);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_bur-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz));
+                end
+                fclose(file_tmp)
+            else
+                
+                %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_ptx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',z(iz),age(iz),ptx(iz)*msed/rho(iz)*100d0,rho(iz),frt(iz) ,w(iz));
+                end
+                fclose(file_tmp);
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_ccx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
+                    %                 , sum(rcc(iz,:)),-log10(pro(iz))
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        z(iz),age(iz),sum(ccx(iz,:))*mcc/rho(iz)*100d0, dicx(iz)*1d3, alkx(iz)*1d3, co3x(iz)*1d3-co3sat, sum(rcc(iz,:)),-log10(prox(iz)) );
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_o2x-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_omx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),omx(iz)*mom/rho(iz)*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_ccx_sp-%3.3i.txt',itrec);
+                fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
+                    fprintf(file_tmp,fmt,z(iz), age(iz),ccx(iz,:)*mcc/2.5d0*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_sig-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),d13c_blk(iz),d18o_blk(iz));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_E4dt_20int/matlab_bur-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz));
+                end
+                fclose(file_tmp)
+                
+            end
+            
+        end
+        
+        function [rectime, cntrec, time_spn, time_trs, time_aft] = recordtime(nrec,wi, ztot, def_biotest, def_sense, def_nonrec)
+            %% set recording time
+            
+            rectime = zeros(1, nrec);
+            
+            %%% +++ tracing experiment
+            time_spn = ztot / wi *50d0; % yr  % spin-up duration, 50 times the shortest residence time possible (assuming no caco3 dissolution)
+            time_trs = 50d3; %  duration of signal change event
+            time_aft = time_trs*3d0;  % duration of simulation after the event
+            
+            if(def_biotest)
+                time_trs = 5d3;   %  smaller duration of event assumed
+                time_aft = time_trs*10d0;
+            end
+            % distributing recording time in 3 different periods
+            for itrec=1:nrec/3
+                rectime(itrec)=itrec*time_spn/real(nrec/3);
+            end
+            for itrec=nrec/3+1:nrec/3*2
+                rectime(itrec)=rectime(nrec/3)+(itrec-nrec/3)*time_trs/real(nrec/3);
+            end
+            for itrec=nrec/3*2+1:nrec
+                rectime(itrec)=rectime(nrec/3*2)+(itrec-nrec/3*2)*time_aft/real(nrec/3)
+            end
+            if(def_sense)
+                time_trs = 0d0;   %  there is no event needed
+                time_aft = 0d0;
+                % time_spn = 2d0*time_spn  % first run without dissolution
+                for itrec=1:nrec
+                    rectime(itrec)=itrec*time_spn/real(nrec);
+                end
+            end
+            %%% ++++
+            cntrec = 1;  % rec number (increasing with recording done )
+            if(~def_nonrec)
+                % open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
+                str = sprintf('matlab_rectime.txt');
+                file_tmp = fopen(str,'wt');
+                for itrec=1:nrec
+                    %write(file_tmp,*) rectime(itrec)  % recording when records are made
+                    fprintf(file_tmp,'%17.16e \n ', rectime(itrec));
+                end
+                fclose(file_tmp);
+            end
+            
+            
+        end
+        
+        function [d13c_sp,d18o_sp] = sig2sp_pre(d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf, def_sense, def_size, nspcc)
+            %% end-member signal assignment
+            
+            if(~def_sense) % without signal tracking
+                %  four end-member caco3 species interpolation
+                d13c_sp(1)=d13c_ocni;
+                d18o_sp(1)=d18o_ocni;
+                d13c_sp(2)=d13c_ocni;
+                d18o_sp(2)=d18o_ocnf;
+                d13c_sp(3)=d13c_ocnf;
+                d18o_sp(3)=d18o_ocni;
+                d13c_sp(4)=d13c_ocnf;
+                d18o_sp(4)=d18o_ocnf;
+            else
+                d18o_sp = zeros(1, nspcc);
+                d13c_sp = zeros(1, nspcc);
+            end
+            
+            if(def_size)
+                % assuming two differently sized caco3 species and giving additional 4 species their end-member isotopic compositions
+                d13c_sp(5)=d13c_ocni;
+                d18o_sp(5)=d18o_ocni;
+                d13c_sp(6)=d13c_ocni;
+                d18o_sp(6)=d18o_ocnf;
+                d13c_sp(7)=d13c_ocnf;
+                d18o_sp(7)=d18o_ocni;
+                d13c_sp(8)=d13c_ocnf;
+                d18o_sp(8)=d18o_ocnf;
+            end
+        end
+        
+        function [dt] = timestep(time,nt_spn,nt_trs,nt_aft, time_spn,time_trs, dt)
+            %% set timestep: smaller when closer to & during event
+            
+            if (time <= time_spn)   % spin-up
+                if (time+dt> time_spn)
+                    dt=time_trs/nt_trs;     %/5000d0   % when close to 'event', time step needs to get smaller
+                else
+                    dt = time_spn/nt_spn;   % /800d0 % otherwise larger time step is better to fasten calculation
+                end
+            elseif (time>time_spn && time<=time_spn+time_trs)  % during event
+                dt = time_trs/nt_trs;           % /5000d0
+            elseif (time>time_spn+time_trs)
+                dt=time_trs/nt_aft; %1000d0 % not too large time step
+            end
+        end
+        
+        
+        function [dep] = bdcnd(time, time_spn, time_trs, depi, depf, def_biotest)
+            
+            
+            if (time <= time_spn)    % spin-up
+                dep = depi;  % initial depth
+            elseif (time>time_spn && time<=time_spn+time_trs)  % during event
+                if(~def_biotest)
+                    % assuming a d13 excursion with shifts occurring with 1/10 times event duration
+                    % the same assumption for depth change
+                    if (time-time_spn<=time_trs/10d0)
+                        dep = depi + (depf-depi)*(time-time_spn)/time_trs*10d0;
+                    elseif (time-time_spn>time_trs/10d0 && time-time_spn<=time_trs/10d0*9d0)
+                        dep = depf;
+                    elseif  (time-time_spn>time_trs/10d0*9d0)
+                        dep = 10d0*depf-9d0*depi - (depf-depi)*(time-time_spn)/time_trs*10d0;
+                    end %if
+                else %#
+                    dep = depi;
+                end %#if
+            elseif (time>time_spn+time_trs)
+                dep = depi;
+            end
+            
+        end
         
     end
     
