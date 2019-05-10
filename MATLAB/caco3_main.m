@@ -19,10 +19,11 @@ classdef caco3_main
     % ===================================
     properties (Constant)
         
-        nspcc = 4;          % number of CaCO3 species
-        nz = 100;  % grid number
-        ztot=500.0d0;   % cm , total sediment thickness
-        tol = 1d-6;      %% tolerance of error
+        nspcc = 4;  % if def_sense: 12;      % number of CaCO3 species
+        ztot=500d0; % if def_sense: 50.0d0;   % cm , total sediment thickness
+        nz = 100;       % grid number
+        tol = 1d-8; % 1d-6    % tolerance of error
+        nrec = 15;      % total recording time of sediment profiles
         
         %% Constants
         cai = 10.3d-3;      % mol kg-1 calcium conc. seawater
@@ -37,6 +38,7 @@ classdef caco3_main
         mcc = 100d0;  % g/mol CaCO3
         ox2om = 1.3d0;  % o2/om ratio for om decomposition (Emerson 1985; Archer 1991)
         om2cc = 0.666d0;   % rain ratio of organic matter to calcite
+        %   om2cc = 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
         % :: om2cc = 0.5d0  % rain ratio of organic matter to calcite
         ncc = 4.5d0;   % (Archer et al. 1989) reaction order for caco3 dissolution
         
@@ -54,17 +56,33 @@ classdef caco3_main
         % komi = 0.06d0;    % /yr  % ?? Emerson 1985? who adopted relatively slow decomposition rate
         
         %% options, compare defines.h
-        def_nobio = false;      % with/without bioturbation
-        def_turbo2 = false;     % all turbo2 mixing
-        def_labs = false;       % all labs mixing
-        def_nonlocal = false; 	% ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
-        def_anoxic = true;      % enabling also anoxic degradation of om
+        def_test = false;       % using 'test' directory
+        def_biotest = false;   	% testing 5kyr signal change event
         def_size = false;       % testting two size caco3 simulation
         
         def_sense = false;       % without signal tracking
+        def_track2 = false;   	% using method2 to track signals (default 42 species)
+        def_nondisp = true;       % won't showing results on display
         def_nonrec = false;       % define not recording profiles?
+        def_showiter = false;      % show co2 iterations & error in calccaco3sys
         def_sparse = false;       % using sparse matrix solve (you need UMFPACK)
-        def_showiter = true;      % show co2 iterations & error in calccaco3sys
+        
+        def_allnobio = false;       % with/without bioturbation
+        def_allturbo2 = false;      % all turbo2 mixing
+        def_alllabs = false;        % all labs mixing
+        def_allnonlocal = false; 	% ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
+        
+        def_oxonly = false;      % enabling only oxic degradation of om
+        
+        def_nodissolve = false;     % assuming no caco3 dissolution
+        
+        def_fullclump = false;      % allowing full 2 substitution including 17o
+        
+        def_mocsy = false;          % using mocsy for caco3 thermodynamics
+        MOCSY_USE_PRECISION = 2;    % digit used for mocsy
+        
+        def_recgrid = false;    % recording the grid to be used for making transition matrix in LABS
+        
         %        kcci = 10.0d0*365.25d0      % /yr; a reference caco3 dissolution rate const.
         kcci = 1d0*365.25d0         % /yr; cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
         %        kcci = 0d0*365.25d0        % /yr; no dissolution
@@ -91,7 +109,7 @@ classdef caco3_main
             %            obj.nz = arg1;
         end
         
-        function [dz,z] = makegrid(beta,nz,ztot)
+        function [dz,z] = makegrid(beta,nz,ztot, def_recgrid)
             
             for iz=1:nz
                 z(iz) = iz*ztot/nz;  % regular grid
@@ -113,13 +131,17 @@ classdef caco3_main
             end
             
             %% ~~~~~~~~~~~~~ saving grid for LABS ~~~~~~~~~~~~~~~~~~~~~~
-            % % #ifdef recgrid
-            % open(unit=100, file='C:/cygwin64/home/YK/LABS/1dgrid.txt',action='write',status='unknown')
-            % do iz = 1, nz
-            %     write(100,*) dz(iz)
-            % enddo
-            % close(100)
-            % % #endif
+            if(def_recgrid)
+                %            open(unit=100, file='C:/cygwin64/home/YK/LABS/1dgrid.txt',action='write',status='unknown')
+                str = sprintf('.LABS/1dgrid.txt');
+                file_tmp = fopen(str,'wt');
+                
+                for iz = 1:nz
+                    %                 write(100,*) dz(iz)
+                    fprintf(file_tmp,'%17.16e \n',dz(iz));
+                end
+                fclose(file_tmp);
+            end
             
         end
         
@@ -1757,6 +1779,502 @@ classdef caco3_main
             
         end
         
+        function recordprofile(itrec, nz,z,age,pt,msed,wi,rho,cc,ccx,dic,dicx,alk,alkx,co3,co3x,co3sat ...
+                ,rcc,pro,o2x,oxco2,anco2,om,mom,mcc,d13c_ocni,d18o_ocni,up,dwn,cnr,adf,nspcc,ptx,w,frt,prox,omx,d13c_blk,d18o_blk)
+            %% write sediment profiles in files
+            
+            if (itrec==0)
+                %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_ptx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi);
+                end
+                fclose(file_tmp);
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
+                    %                 , sum(rcc(iz,:)),-log10(pro(iz))
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat, sum(rcc(iz,:)),-log10(pro(iz) ));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_o2x-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_omx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),om(iz)*mom/2.5d0*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx_sp-%3.3i.txt',itrec);
+                fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
+                    fprintf(file_tmp,fmt,z(iz), age(iz),cc(iz,:)*mcc/2.5d0*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_sig-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),d13c_ocni,d18o_ocni);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_bur-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz));
+                end
+                fclose(file_tmp)
+            else
+                
+                %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_ptx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',z(iz),age(iz),ptx(iz)*msed/rho(iz)*100d0,rho(iz),frt(iz) ,w(iz));
+                end
+                fclose(file_tmp);
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
+                    %                 , sum(rcc(iz,:)),-log10(pro(iz))
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        z(iz),age(iz),sum(ccx(iz,:))*mcc/rho(iz)*100d0, dicx(iz)*1d3, alkx(iz)*1d3, co3x(iz)*1d3-co3sat, sum(rcc(iz,:)),-log10(prox(iz)) );
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_o2x-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_omx-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),omx(iz)*mom/rho(iz)*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx_sp-%3.3i.txt',itrec);
+                fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
+                    fprintf(file_tmp,fmt,z(iz), age(iz),ccx(iz,:)*mcc/2.5d0*100d0);
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_sig-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),d13c_blk(iz),d18o_blk(iz));
+                end
+                fclose(file_tmp)
+                
+                %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
+                str = sprintf('./recprofile_dt_1e6_int10/matlab_bur-%3.3i.txt',itrec);
+                file_tmp = fopen(str,'wt');
+                for iz = 1:nz
+                    %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
+                    fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz));
+                end
+                fclose(file_tmp)
+                
+            end
+            
+        end
+        
+        function [rectime, cntrec, time_spn, time_trs, time_aft] = recordtime(nrec,wi, ztot, def_biotest, def_sense, def_nonrec)
+            %% set recording time
+            
+            rectime = zeros(1, nrec);
+            
+            %%% +++ tracing experiment
+            time_spn = ztot / wi *50d0; % yr  % spin-up duration, 50 times the shortest residence time possible (assuming no caco3 dissolution)
+            time_trs = 50d3; %  duration of signal change event
+            time_aft = time_trs*3d0;  % duration of simulation after the event
+            
+            if(def_biotest)
+                time_trs = 5d3;   %  smaller duration of event assumed
+                time_aft = time_trs*10d0;
+            end
+            % distributing recording time in 3 different periods
+            for itrec=1:nrec/3
+                rectime(itrec)=itrec*time_spn/real(nrec/3);
+            end
+            for itrec=nrec/3+1:nrec/3*2
+                rectime(itrec)=rectime(nrec/3)+(itrec-nrec/3)*time_trs/real(nrec/3);
+            end
+            for itrec=nrec/3*2+1:nrec
+                rectime(itrec)=rectime(nrec/3*2)+(itrec-nrec/3*2)*time_aft/real(nrec/3);
+            end
+            if(def_sense)
+                time_trs = 0d0;   %  there is no event needed
+                time_aft = 0d0;
+                % time_spn = 2d0*time_spn  % first run without dissolution
+                for itrec=1:nrec
+                    rectime(itrec)=itrec*time_spn/real(nrec);
+                end
+            end
+            %%% ++++
+            cntrec = 1;  % rec number (increasing with recording done )
+            if(~def_nonrec)
+                % open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
+                str = sprintf('matlab_rectime.txt');
+                file_tmp = fopen(str,'wt');
+                for itrec=1:nrec
+                    %write(file_tmp,*) rectime(itrec)  % recording when records are made
+                    fprintf(file_tmp,'%17.16e \n ', rectime(itrec));
+                end
+                fclose(file_tmp);
+            end
+            
+            
+        end
+        
+        function [d13c_sp,d18o_sp] = sig2sp_pre(d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf, def_sense, def_size, nspcc)
+            %% end-member signal assignment
+            
+            if(~def_sense) % without signal tracking
+                %  four end-member caco3 species interpolation
+                d13c_sp(1)=d13c_ocni;
+                d18o_sp(1)=d18o_ocni;
+                d13c_sp(2)=d13c_ocni;
+                d18o_sp(2)=d18o_ocnf;
+                d13c_sp(3)=d13c_ocnf;
+                d18o_sp(3)=d18o_ocni;
+                d13c_sp(4)=d13c_ocnf;
+                d18o_sp(4)=d18o_ocnf;
+            else
+                d18o_sp = zeros(1, nspcc);
+                d13c_sp = zeros(1, nspcc);
+            end
+            
+            if(def_size)
+                % assuming two differently sized caco3 species and giving additional 4 species their end-member isotopic compositions
+                d13c_sp(5)=d13c_ocni;
+                d18o_sp(5)=d18o_ocni;
+                d13c_sp(6)=d13c_ocni;
+                d18o_sp(6)=d18o_ocnf;
+                d13c_sp(7)=d13c_ocnf;
+                d18o_sp(7)=d18o_ocni;
+                d13c_sp(8)=d13c_ocnf;
+                d18o_sp(8)=d18o_ocnf;
+            end
+        end
+        
+        function [dt] = timestep(time,nt_spn,nt_trs,nt_aft, time_spn,time_trs, dt)
+            %% set timestep: smaller when closer to & during event
+            
+            if (time <= time_spn)   % spin-up
+                if (time+dt> time_spn)
+                    dt=time_trs/nt_trs;     %/5000d0   % when close to 'event', time step needs to get smaller
+                else
+                    dt = time_spn/nt_spn;   % /800d0 % otherwise larger time step is better to fasten calculation
+                end
+            elseif (time>time_spn && time<=time_spn+time_trs)  % during event
+                dt = time_trs/nt_trs;           % /5000d0
+            elseif (time>time_spn+time_trs)
+                dt=time_trs/nt_aft; %1000d0 % not too large time step
+            end
+        end
+        
+        function [d13c_ocn,d18o_ocn,ccflx,d18o_sp,d13c_sp] = signal_flx(time, time_spn,time_trs,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf ...
+                ,ccflx,ccflxi,d18o_sp,d13c_sp,it,nspcc, flxfini,flxfinf, def_track2, def_size, def_biotest)
+            
+            % local varaiable
+            flxfin = 0.0;       % flux ratio of fine particles:
+            cntsp = 0;          % counting caco3 species numbers when signal is tracked by method 2, signal is assigned species as time goes so counting the number of species whose signal has been assigned
+            % flux fractions used for assigning flux values to realized isotope input changes
+            flxfrc = zeros(1, nspcc);
+            flxfrc2 = zeros(1, nspcc);
+            
+            if (time <= time_spn)   % spin-up
+                d13c_ocn = d13c_ocni;  % take initial values
+                d18o_ocn = d18o_ocni;
+                ccflx = zeros(1, nspcc);
+                ccflx(1) = ccflxi;  % raining only species with initial signal values
+                if(def_track2)
+                    cntsp=1;  % when signal is tracked by method 2, signal is assigned species as time goes so counting the number of species whose signal has been assigned
+                    d18o_sp(cntsp)=d18o_ocn;
+                    d13c_sp(cntsp)=d13c_ocn;
+                    ccflx = zeros(1, nspcc);
+                    ccflx(cntsp) = ccflxi;
+                end
+                if(def_size)
+                    ccflx = zeros(1, nspcc);
+                    flxfin = flxfini;   % flux ratio of fine particles: i and f denote initial and final values
+                    ccflx(1) = (1d0-flxfin)*ccflxi; % fine species with initial signals
+                    ccflx(5) = flxfin*ccflxi;       % coarse species with initial signals
+                end
+            elseif (time>time_spn && time<=time_spn+time_trs)   % during event
+                d13c_ocn = d13c_ocni + (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs; % single step
+                d18o_ocn = d18o_ocni + (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs;  % single step
+                % creating spike (go from initial to final and come back to initial again taking half time of event duration )
+                % this shape is assumed for d18o and fine (& coarse) caco3 flux changes
+                if (time-time_spn<=time_trs/2d0)
+                    d18o_ocn = d18o_ocni + (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0;
+                    flxfin = flxfini + (time-time_spn)*(flxfinf-flxfini)/time_trs*2d0;
+                else
+                    d18o_ocn = 2d0*d18o_ocnf - d18o_ocni - (time-time_spn)*(d18o_ocnf-d18o_ocni)/time_trs*2d0;
+                    flxfin = 2d0*flxfinf - flxfini - (time-time_spn)*(flxfinf-flxfini)/time_trs*2d0;
+                end
+                if(~def_biotest)
+                    % assuming a d13 excursion with shifts occurring with 1/10 times event duration
+                    % the same assumption for depth change
+                    if (time-time_spn<=time_trs/10d0)
+                        d13c_ocn = d13c_ocni + (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*10d0;
+                    elseif(time-time_spn>time_trs/10d0 && time-time_spn<=time_trs/10d0*9d0)
+                        d13c_ocn = d13c_ocnf;
+                    elseif  (time-time_spn>time_trs/10d0*9d0)
+                        d13c_ocn = 10d0*d13c_ocnf - 9d0*d13c_ocni  - (time-time_spn)*(d13c_ocnf-d13c_ocni)/time_trs*10d0;
+                    end
+                end %#if
+                if (~(d13c_ocn>=d13c_ocnf && d13c_ocn<=d13c_ocni))  % check if calculated d13c and d18o are within the assumed ranges
+                    fprintf('error in d13c: %17.16e',d13c_ocn);
+                    msg = 'error in d13c, stop';
+                    error(msg)
+                end
+                % calculating fractions of flux assigned to individual caco3 species in case of interpolation of 2 signal inputs by 4 species
+                % NEED to extend to allow tacking of any number of signals
+                flxfrc(1) = abs(d13c_ocnf-d13c_ocn)/(abs(d13c_ocnf-d13c_ocn)+abs(d13c_ocni-d13c_ocn));
+                flxfrc(2) = abs(d13c_ocni-d13c_ocn)/(abs(d13c_ocnf-d13c_ocn)+abs(d13c_ocni-d13c_ocn));
+                flxfrc(3) = abs(d18o_ocnf-d18o_ocn)/(abs(d18o_ocnf-d18o_ocn)+abs(d18o_ocni-d18o_ocn));
+                flxfrc(4) = abs(d18o_ocni-d18o_ocn)/(abs(d18o_ocnf-d18o_ocn)+abs(d18o_ocni-d18o_ocn));
+                while(2>1)  % do
+                    % case flxfrc2(1)=0
+                    flxfrc2=zeros(1,nspcc);
+                    flxfrc2(2) = flxfrc(1);
+                    flxfrc2(3) = flxfrc(3);
+                    flxfrc2(4) = flxfrc(2)-flxfrc2(3);
+                    if (all(flxfrc2>=0d0))
+                        break   % exit in fortran (terminates while-loop)
+                    end
+                    flxfrc2=zeros(1,nspcc);
+                    % case flxfrc2(2)=0
+                    flxfrc2(1) = flxfrc(1);
+                    flxfrc2(3) = flxfrc(3)-flxfrc2(1);
+                    flxfrc2(4) = flxfrc(4);
+                    if (all(flxfrc2>=0d0));
+                        break   % exit in fortran (terminates while-loop)
+                    end
+                    flxfrc2=zeros(1,nspcc);
+                    % case flxfrc2(3)=0
+                    flxfrc2(1) = flxfrc(3);
+                    flxfrc2(2) = flxfrc(1)-flxfrc2(1);
+                    flxfrc2(4) = flxfrc(2);
+                    if (all(flxfrc2>=0d0));
+                        break   % exit in fortran (terminates while-loop)
+                    end
+                    flxfrc2=zeros(1,nspcc);
+                    % case flxfrc2(4)=0
+                    flxfrc2(2) = flxfrc(4);
+                    flxfrc2(1) = flxfrc(1)-flxfrc2(2);
+                    flxfrc2(3) = flxfrc(2);
+                    if (all(flxfrc2>=0d0))
+                        break   % exit in fortran (terminates while-loop)
+                    end
+                    %                                             print*,'error' % should not come here
+                    %                                             stop
+                    msg = 'error in signal_flx, stop';  % should not come here
+                    error(msg)
+                end
+                if(def_track2)
+                    % tracking as time goes
+                    % assignment of new caco3 species is conducted so that nspcc species is used up within 5000 interations
+                    % timing of new species assignment can change at different time period during the event
+                    if (time-time_spn<=time_trs/10d0)
+                        if (mod(it,floor(5000/(nspcc-2)))==0)
+                            cntsp=cntsp+1;           % new species assinged
+                            d18o_sp(cntsp)=d18o_ocn;
+                            d13c_sp(cntsp)=d13c_ocn;
+                            ccflx = 0d0;
+                            ccflx(cntsp) = ccflxi;
+                        end
+                    elseif (time-time_spn>time_trs/10d0 && time-time_spn<=time_trs/10d0*9d0)
+                        if (mod(it,floor(5000/(nspcc-2)))==0)
+                            cntsp=cntsp+1;
+                            d18o_sp(cntsp)=d18o_ocn;
+                            d13c_sp(cntsp)=d13c_ocn;
+                            ccflx = 0d0;
+                            ccflx(cntsp) = ccflxi;
+                        end
+                    elseif  (time-time_spn>time_trs/10d0*9d0)
+                        if (mod(it,floor(5000/(nspcc-2)))==0)
+                            cntsp=cntsp+1;
+                            d18o_sp(cntsp)=d18o_ocn;
+                            d13c_sp(cntsp)=d13c_ocn;
+                            ccflx = 0d0;
+                            ccflx(cntsp) = ccflxi;
+                        end
+                    end
+                else % # def_track2
+                    % usually using 4 species interpolation for 2 signals
+                    % NEED to be extended so that any number of signals can be tracked with corresponding minimum numbers of caco3 species
+                    for isp=1:nspcc
+                        ccflx(isp)=flxfrc2(isp)*ccflxi;
+                    end
+                end %#if def_track2
+                
+                if(def_size)
+                    for isp=1:4 % fine species
+                        ccflx(isp)=flxfrc2(isp)*ccflxi*(1d0-flxfin);
+                    end
+                    for isp=5:8 % coarse species
+                        ccflx(isp)=flxfrc2(isp-4)*ccflxi*flxfin;
+                    end
+                end %#if
+                
+            elseif (time>time_spn+time_trs)     % after event
+                d13c_ocn = d13c_ocni;        % now again initial values
+                d18o_ocn = d18o_ocni;
+                ccflx = 0d0;
+                ccflx(1) = ccflxi;  % allowing only caco3 flux with initial signal values
+                if(def_track2)
+                    if (cntsp+1~=nspcc)  % checking used caco3 species number is enough and necessary
+                        % print*,'fatal error in counting',cntsp
+                        % stop
+                        fprintf('fatal error in counting  caco3 species numbers : %i',cntsp);
+                        msg = 'fatal error in counting  caco3 species numbers, stop';
+                        error(msg)
+                    end
+                    d18o_sp(cntsp+1)=d18o_ocn;
+                    d13c_sp(cntsp+1)=d13c_ocn;
+                    ccflx = 0d0;
+                    ccflx(cntsp+1) = ccflxi;
+                end %# if
+                if(def_size)
+                    ccflx = 0d0;
+                    flxfin=flxfini;
+                    ccflx(1) = (1d0-flxfin)*ccflxi;  % fine species
+                    ccflx(5) = flxfin*ccflxi;  % coarse species
+                end %# if
+                if(def_biotest)
+                    d13c_ocn = d13c_ocnf;   % finish with final value
+                    d18o_ocn = d18o_ocni;
+                    ccflx = 0d0;
+                    ccflx(3) = ccflxi;  % caco3 species with d13c_ocnf and d18o_ocni
+                end %# if
+            end
+            
+        end
+        
+        function [dep] = bdcnd(time, time_spn, time_trs, depi, depf, def_biotest)
+            
+            if (time <= time_spn)    % spin-up
+                dep = depi;  % initial depth
+            elseif (time>time_spn && time<=time_spn+time_trs)  % during event
+                if(~def_biotest)
+                    % assuming a d13 excursion with shifts occurring with 1/10 times event duration
+                    % the same assumption for depth change
+                    if (time-time_spn<=time_trs/10d0)
+                        dep = depi + (depf-depi)*(time-time_spn)/time_trs*10d0;
+                    elseif (time-time_spn>time_trs/10d0 && time-time_spn<=time_trs/10d0*9d0)
+                        dep = depf;
+                    elseif  (time-time_spn>time_trs/10d0*9d0)
+                        dep = 10d0*depf-9d0*depi - (depf-depi)*(time-time_spn)/time_trs*10d0;
+                    end %if
+                else %#
+                    dep = depi;
+                end %#if
+            elseif (time>time_spn+time_trs)
+                dep = depi;
+            end
+        end
+        
+        
+        function sigrec(w,file_sigmlyid,file_sigmlydid,file_sigbtmid,time,age,izrec,d13c_blk,d13c_blkc  ...
+                ,d13c_blkf,d18o_blk,d18o_blkc,d18o_blkf,ccx,mcc,rho,ptx,msed,izrec2,nz, def_size)
+            %% recording signals at 3 different depths (btm of mixed layer, 2xdepths of btm of mixed layer and btm depth of calculation domain)
+            
+            
+            if(~def_size)
+                if (all(w>=0d0))    % not recording when burial is negative
+                    
+                    % 	write(file_sigmly,*) time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) &
+                    %   	,sum(ccx(izrec,:))*mcc/rho(izrec)*100d0,ptx(izrec)*msed/rho(izrec)*100d0
+                    fprintf(file_sigmlyid,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        time-age(izrec),d13c_blk(izrec),d18o_blk(izrec), sum(ccx(izrec,:))*mcc/rho(izrec)*100d0, ptx(izrec)*msed/rho(izrec)*100d0 );
+                    % 	write(file_sigmlyd,*) time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2) &
+                    %    	,sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0
+                    fprintf(file_sigmlydid,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2), sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0 );
+                    %  	write(file_sigbtm,*) time-age(nz),d13c_blk(nz),d18o_blk(nz) &
+                    %       ,sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0
+                    fprintf(file_sigbtmid,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        time-age(nz),d13c_blk(nz),d18o_blk(nz), sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0 );
+                end
+            else
+                if (all(w>=0d0))    % not recording when burial is negative
+                    % 	    write(file_sigmly,*) time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) &
+                    %        ,sum(ccx(izrec,:))*mcc/rho(izrec)*100d0,ptx(izrec)*msed/rho(izrec)*100d0  &
+                    %        ,d13c_blkf(izrec),d18o_blkf(izrec),sum(ccx(izrec,1:4))*mcc/rho(izrec)*100d0  &
+                    %       ,d13c_blkc(izrec),d18o_blkc(izrec),sum(ccx(izrec,5:8))*mcc/rho(izrec)*100d0
+                    fprintf(file_sigmlyid,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        time-age(izrec),d13c_blk(izrec),d18o_blk(izrec) ...
+                        ,sum(ccx(izrec,:))*mcc/rho(izrec)*100d0,ptx(izrec)*msed/rho(izrec)*100d0  ...
+                        ,d13c_blkf(izrec),d18o_blkf(izrec),sum(ccx(izrec,1:4))*mcc/rho(izrec)*100d0  ...
+                        ,d13c_blkc(izrec),d18o_blkc(izrec),sum(ccx(izrec,5:8))*mcc/rho(izrec)*100d0  );
+                    %     write(file_sigmlyd,*) time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2) &
+                    %         ,sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0  &
+                    %         ,d13c_blkf(izrec2),d18o_blkf(izrec2),sum(ccx(izrec2,1:4))*mcc/rho(izrec2)*100d0  &
+                    %         ,d13c_blkc(izrec2),d18o_blkc(izrec2),sum(ccx(izrec2,5:8))*mcc/rho(izrec2)*100d0
+                    fprintf(file_sigmlydid,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        time-age(izrec2),d13c_blk(izrec2),d18o_blk(izrec2) ...
+                        ,sum(ccx(izrec2,:))*mcc/rho(izrec2)*100d0,ptx(izrec2)*msed/rho(izrec2)*100d0 ...
+                        ,d13c_blkf(izrec2),d18o_blkf(izrec2),sum(ccx(izrec2,1:4))*mcc/rho(izrec2)*100d0  ...
+                        ,d13c_blkc(izrec2),d18o_blkc(izrec2),sum(ccx(izrec2,5:8))*mcc/rho(izrec2)*100d0 );
+                    %     write(file_sigbtm,*) time-age(nz),d13c_blk(nz),d18o_blk(nz) &
+                    %         ,sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0 &
+                    %         ,d13c_blkf(nz),d18o_blkf(nz),sum(ccx(nz,1:4))*mcc/rho(nz)*100d0  &
+                    %         ,d13c_blkc(nz),d18o_blkc(nz),sum(ccx(nz,5:8))*mcc/rho(nz)*100d0
+                    fprintf(file_sigbtmid,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
+                        time-age(nz),d13c_blk(nz),d18o_blk(nz) ...
+                        ,sum(ccx(nz,:))*mcc/rho(nz)*100d0,ptx(nz)*msed/rho(nz)*100d0 ...
+                        ,d13c_blkf(nz),d18o_blkf(nz),sum(ccx(nz,1:4))*mcc/rho(nz)*100d0  ...
+                        ,d13c_blkc(nz),d18o_blkc(nz),sum(ccx(nz,5:8))*mcc/rho(nz)*100d0 );
+                end
+                
+            end
+            
+        end
         
     end
     
