@@ -165,3 +165,67 @@ dco3_dalk = 1d0/(ph/k2+2d0) + alk*(-1d0)/((ph/k2+2d0)**2d0)*(1d0/k2)*dph_dalk
 dco3_ddic = 0d0/(ph/k2+2d0) + alk*(-1d0)/((ph/k2+2d0)**2d0)*(1d0/k2)*dph_ddic
 
 endsubroutine calcdevs
+
+subroutine calcco2chemsp(dicsp,alk,tmp,sal,dep,nz,nspcc,ph,co2,hco3,co3,dco3sp_dalk,dco3sp_ddicsp,info) 
+! co2 species have individual species concentrations
+implicit none
+integer(kind=4),intent(in) :: nz,nspcc
+integer(kind=4),intent(out)::info
+real(kind=8),intent(in)::dicsp(nz,nspcc),alk(nz),tmp,sal,dep
+real(kind=8),intent(out)::dco3sp_dalk(nz,nspcc),dco3sp_ddicsp(nz,nspcc,nspcc)
+real(kind=8)::ph(nz),co2(nz,nspcc),hco3(nz,nspcc),co3(nz,nspcc),dic(nz)
+real(kind=8)::a(nz),b(nz),c(nz),db_dalk(nz),dc_dalk(nz)
+real(kind=8)::db_ddic(nz),dc_ddic(nz),dph_dalk(nz),dph_ddic(nz)
+real(kind=8)::calceq1,calceq2,k1,k2
+integer(kind=4) iz,isp,iisp
+
+do iz=1,nz
+    dic(iz)=sum(dicsp(iz,:))
+enddo
+info=0
+k1=calceq1(tmp,sal,dep)
+k2=calceq2(tmp,sal,dep)
+a=1d0
+b=(1d0-dic/alk)*k1
+c=(1d0-2d0*dic/alk)*k1*k2
+ph = (-b+(b*b-4d0*a*c)**0.5d0)/2d0/a
+if (any(ph<0d0)) then
+    print*,'... unsable to calculate ph'
+    ! print*,dic
+    ! print*,alk
+    ! print*,ph
+    ! stop
+    info=1
+    return
+endif
+do isp=1,nspcc
+    co2(:,isp) = dicsp(:,isp)/(1d0+k1/ph(:)+k1*k2/ph(:)/ph(:))
+    hco3(:,isp) = dicsp(:,isp)/(ph(:)/k1+1d0+k2/ph(:))
+    co3(:,isp) = dicsp(:,isp)/(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0)
+enddo
+
+db_dalk = k1*(-1d0)*dic*(-1d0)/alk/alk
+dc_dalk = k1*k2*(-2d0)*dic*(-1d0)/alk/alk
+db_ddic = k1*(-1d0/alk)
+dc_ddic = k1*k2*(-2d0/alk)
+dph_dalk = -0.5d0*db_dalk + 0.5d0*0.5d0*(b*b-4d0*c)**(-0.5d0)*(2d0*b*db_dalk - 4d0*dc_dalk)
+dph_ddic = -0.5d0*db_ddic + 0.5d0*0.5d0*(b*b-4d0*c)**(-0.5d0)*(2d0*b*db_ddic - 4d0*dc_ddic)
+! dco3_dalk = 1d0/(ph/k2+2d0) + alk*(-1d0)/((ph/k2+2d0)**2d0)*(1d0/k2)*dph_dalk
+! dco3_ddic = 0d0/(ph/k2+2d0) + alk*(-1d0)/((ph/k2+2d0)**2d0)*(1d0/k2)*dph_ddic 
+do isp=1,nspcc
+    dco3sp_dalk(:,isp)=0d0/(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0) &
+        + dicsp(:,isp)*(-1d0)*(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0)**(-2d0)  &
+        *(2*ph(:)/k1/k2+1d0/k2)*dph_dalk(:) 
+    do iisp=1,nspcc
+        if (iisp==isp) then 
+            dco3sp_ddicsp(:,isp,iisp) = 1d0/(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0) &
+                + dicsp(:,isp)*(-1d0)*(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0)**(-2d0)  &
+                *(2*ph(:)/k1/k2+1d0/k2)*dph_ddic(:) 
+        else 
+            dco3sp_ddicsp(:,isp,iisp) = 0d0/(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0) &
+                + dicsp(:,isp)*(-1d0)*(ph(:)*ph(:)/k1/k2+ph(:)/k2+1d0)**(-2d0)  &
+                *(2*ph(:)/k1/k2+1d0/k2)*dph_ddic(:) 
+        endif 
+    enddo
+enddo
+endsubroutine calcco2chemsp
