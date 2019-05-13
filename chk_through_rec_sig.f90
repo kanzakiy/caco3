@@ -43,8 +43,10 @@ ccflxi = 12d-6
 om2cc = 0.7d0
 open(unit=file_sigmly,file=trim(adjustl(workdir))//'sigmly.txt',action='write',status='unknown')! recording signals etc at just below mixed layer 
 open(unit=file_sigmlyd,file=trim(adjustl(workdir))//'sigmlyd.txt',action='write',status='unknown') ! recording signals etc at depths of 2x mixed layer thickness 
-open(unit=file_sigbtm,file=trim(adjustl(workdir))//'sigbtm.txt',action='write',status='unknown')! ! recording signals etc at bottom of sediment  
-
+open(unit=file_sigbtm,file=trim(adjustl(workdir))//'sigbtm.txt',action='write',status='unknown')! ! recording signals etc at bottom of sediment 
+! <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019 <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
+open(unit=file_bound,file=trim(adjustl(workdir))//'bound.txt',action='write',status='unknown')! recording boundary conditions changes 
+! <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019  <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
 
 !********************************************************************************************************************************  ADDED-END
 
@@ -187,6 +189,16 @@ do   ! <<<----------------------------------------------------------------------
         stop
     endif 
 #endif
+ 
+! <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019  <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
+#ifndef size 
+    !  recording fluxes of two types of caco3 separately 
+    write(file_bound,*) time, d13c_ocn, d18o_ocn, (ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+#else 
+    !  do not record separately 
+    write(file_bound,*) time, d13c_ocn, d18o_ocn, sum(ccflx(1:4)),sum(ccflx(5:8)),(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+#endif  
+! <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019  <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
 
     !! === temperature & pressure and associated boundary changes ====
     ! if temperature is changed during signal change event this affect diffusion coeff etc. 
