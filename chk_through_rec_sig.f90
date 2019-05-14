@@ -555,5 +555,8 @@ enddo
 close(file_sigmly)! recording signals etc at just below mixed layer 
 close(file_sigmlyd) ! recording signals etc at depths of 2x mixed layer thickness 
 close(file_sigbtm)! ! recording signals etc at bottom of sediment  
+! <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019 <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
+close(file_bound)! recording boundary conditions changes 
+! <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019  <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
 !********************************************************************************************************************************  ADDED-END
 endprogram 
