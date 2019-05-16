@@ -8,7 +8,7 @@ classdef caco3_test
         
         function bc = caco3_set_boundary_cond(global_var)
             
-            bc.ccflxi = 10d-6;      % mol (CaCO3) cm-2 yr-1  % a reference caco3 flux; Emerson and Archer (1990)
+            bc.ccflxi = 12d-6;      % mol (CaCO3) cm-2 yr-1  % a reference caco3 flux; Emerson and Archer (1990)
             bc.omflx = 12d-6;       % mol cm-2 yr-1       % a reference om flux; Emerson and Archer (1990)
             bc.detflx = 180d-6;     % g cm-2 yr-1  % a reference detrital flux; MUDS input http://forecast.uchicago.edu/Projects/muds.html
             bc.om = 1d-8*ones(1,global_var.nz);           % assume an arbitrary low conc.
@@ -747,7 +747,7 @@ classdef caco3_test
                     caco3_main.calccaco3sys(ccx,dicx,alkx,rcc, dt, global_var.nspcc,dic,alk,dep,sal,tmp,mix_type.labs,mix_type.turbo2,mix_type.nonlocal, ...
                     global_var.sporo, global_var.sporoi, global_var.sporof, global_var.poro, dif_alk, dif_dic, ...
                     w, up, dwn, cnr, adf, global_var.dz, trans, cc, oxco2, anco2, co3sat, kcc, ccflx, global_var.ncc, global_var.nz, ...
-                    global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter);
+                    global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter, global_var.def_sense);
                 % % %% Dom test
                 % %                 if(it ==nt)
                 % %                     fprintf('~~~~ cccx ~~~~ itr = %i \n', itr);
@@ -1215,7 +1215,7 @@ classdef caco3_test
                     caco3_main.calccaco3sys(ccx,dicx,alkx,rcc, dt, global_var.nspcc,dic,alk,dep,sal,tmp,mix_type.labs,mix_type.turbo2,mix_type.nonlocal, ...
                     global_var.sporo, global_var.sporoi, global_var.sporof, global_var.poro, dif_alk, dif_dic, ...
                     w, up, dwn, cnr, adf, global_var.dz, trans, cc, oxco2, anco2, co3sat, kcc, ccflx, global_var.ncc, global_var.nz, ...
-                    global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter);
+                    global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter, global_var.def_sense);
                 
                 if(flg_500)
                     msg = 'error after calccaco3sys, STOP.';
@@ -1398,7 +1398,7 @@ classdef caco3_test
             time = 0d0; % model time [yr]
             it = 1; % integration count
             nt = 10; % total integration
-            dt = 1d8; % time step [yr]
+            dt = 1d4; % time step [yr]
             
             rho = 2.5d0*ones(global_var.nz, 1); % assume here density (this is going to be calculated based on solid phase composition )
             
@@ -1409,7 +1409,8 @@ classdef caco3_test
             %%%  addition to chk_om.f90 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             global_var.zox = 10d0;  % initial assumption on oxygen penetaration depth [cm]
             %%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            
+        	help= 1;
+
             
             for it=1:nt
                 
@@ -1590,7 +1591,7 @@ classdef caco3_test
                         caco3_main.calccaco3sys(ccx,dicx,alkx,rcc, dt, global_var.nspcc,dic,alk,dep,sal,tmp,mix_type.labs,mix_type.turbo2,mix_type.nonlocal, ...
                         global_var.sporo, global_var.sporoi, global_var.sporof, global_var.poro, dif_alk, dif_dic, ...
                         w, up, dwn, cnr, adf, global_var.dz, trans, cc, oxco2, anco2, co3sat, kcc, ccflx, global_var.ncc, global_var.nz, ...
-                        global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter);
+                        global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter, global_var.def_sense);
                     
                     if(flg_500)
                         msg = 'error after calccaco3sys, STOP.';
@@ -1735,10 +1736,11 @@ classdef caco3_test
                 d18o_ocni = 0d0;
                 d13c_blk = zeros(1, global_var.nz);
                 d18o_blk = zeros(1, global_var.nz);
-
+%                if(mod(it,800)==0)                    
                 caco3_main.recordprofile(it, global_var.nz, global_var.z, age, pt, global_var.msed, wi, rho, cc, ccx, dic, dicx, alk, alkx, co3, co3x, co3sat ...
                     , rcc, pro, o2x, oxco2, anco2, om, global_var.mom, global_var.mcc, d13c_ocni, d18o_ocni, up,dwn, cnr, adf, global_var.nspcc, ptx, w, frt, prox, omx, d13c_blk, d18o_blk)
-                
+%                help = help+1;
+%                end
             end
             
         end
@@ -1779,12 +1781,14 @@ classdef caco3_test
 %            global_var.om2cc = 0.7d0;   % rain ratio of organic matter to calcite
 
             % open files for output signal at 3 different depths
-            file_sigmly = sprintf('./matlab_sigmly.txt');
+            file_sigmly = sprintf('./recprofile_signaltrack_fickian/matlab_sigmly.txt');
             file_sigmlyid = fopen(file_sigmly,'wt');
-            file_sigmlyd = sprintf('./matlab_sigmlyd.txt');
+            file_sigmlyd = sprintf('./recprofile_signaltrack_fickian/matlab_sigmlyd.txt');
             file_sigmlydid = fopen(file_sigmlyd,'wt');
-            file_sigbtm = sprintf('./matlab_sigbtm.txt');
+            file_sigbtm = sprintf('./recprofile_signaltrack_fickian/matlab_sigbtm.txt');
             file_sigbtmid = fopen(file_sigbtm,'wt');
+            file_bound = sprintf('./recprofile_signaltrack_fickian/matlab_bound.txt');
+            file_boundid = fopen(file_bound,'wt');
             
             
             flg_500 = false;    % error in calculation?
@@ -1800,9 +1804,9 @@ classdef caco3_test
             % assume fluxes of om, cc and clay, required to calculate burial velocity
             [omflx, detflx, ccflx] = caco3_main.flxstat(global_var.om2cc, bc.ccflxi, global_var.mcc, global_var.nspcc);
             %            fprintf('ccflx %17.16e \n', ccflx);
-            %            fprintf('om2cc, ccflxi, detflx, omflx, sum(ccflx) \n');
-            %            fprintf('%17.16e %17.16e %17.16e %17.16e %17.16e \n', global_var.om2cc, bc.ccflxi, detflx, omflx, sum(ccflx));
-            %            fprintf(' \n');
+                        fprintf('om2cc, ccflxi, detflx, omflx, sum(ccflx) \n');
+                        fprintf('%17.16e %17.16e %17.16e %17.16e %17.16e \n', global_var.om2cc, bc.ccflxi, detflx, omflx, sum(ccflx));
+                        fprintf(' \n');
             
             % molar volume (cm3 mol-1) needed for burial rate calculation
             mvom = global_var.mom/global_var.rhoom;  % om
@@ -1922,6 +1926,21 @@ classdef caco3_test
                     end
                 end
                 
+                % <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019  <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
+                if(~global_var.def_size)
+                    %  recording fluxes of two types of caco3 separately 
+                    % write(file_bound,*) time, d13c_ocn, d18o_ocn, (ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+                    fmt=[repmat('%17.16e \t',1,global_var.nspcc+9) '\n'];
+                    fprintf(file_boundid,fmt, time, d13c_ocn, d18o_ocn, ccflx(:), tmp, dep, sal, bc.dici,bc.alki, bc.o2i);
+                else 
+                    %  do not record separately 
+                    % write(file_bound,*) time, d13c_ocn, d18o_ocn, sum(ccflx(1:4)),sum(ccflx(5:8)),(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+                    fmt=[repmat('%17.16e \t',1,global_var.nspcc+11) '\n'];
+                    fprintf(file_boundid,fmt, time, d13c_ocn, d18o_ocn, sum(ccflx(1:4)),sum(ccflx(5:8)), ccflx(:), tmp, dep, sal,bc.dici,bc.alki, bc.o2i);
+                    
+                end  
+                % <<<<<<<<<<<<<<<<<<<<<  NEW: 05/13/2019  <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<< <<<<<<<<<<<<<<<<<<<<<
+                
                 %% === temperature & pressure and associated boundary changes ====
                 % if temperature is changed during signal change event this affect diffusion coeff etc.
                 %    call coefs(  &
@@ -1940,7 +1959,12 @@ classdef caco3_test
                 while(err_w > global_var.tol)       %   	300 continue % point of restart when burial velocity does not converge
                     
                     fprintf('(int_count,dt,time)  %2.2i %11.3e %11.3e\n', int_count, dt, time);
-                    
+%                     if(int_count == 800)
+%                         fprintf('w, \t frc \n');
+%                         for iz=1:interval:global_var.nz
+%                             fprintf('%17.16e \t %17.16e \n', w(iz), frt(iz));
+%                         end
+%                     end
                     dw = zeros(1, global_var.nz);                       % burial rate change
                     
                     itr_om_o2 = 0;        % iteration number for om and o2 calcuation
@@ -2109,7 +2133,7 @@ classdef caco3_test
                         caco3_main.calccaco3sys(ccx,dicx,alkx,rcc, dt, global_var.nspcc,dic,alk,dep,sal,tmp,mix_type.labs,mix_type.turbo2,mix_type.nonlocal, ...
                         global_var.sporo, global_var.sporoi, global_var.sporof, global_var.poro, dif_alk, dif_dic, ...
                         w, up, dwn, cnr, adf, global_var.dz, trans, cc, oxco2, anco2, co3sat, kcc, ccflx, global_var.ncc, global_var.nz, ...
-                        global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter);
+                        global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter, global_var.def_sense);
                     
                     if(flg_500)
                         msg = 'error after calccaco3sys, STOP.';
@@ -2166,7 +2190,7 @@ classdef caco3_test
                     
                     % error and iteration evaluation
                     itr_w = itr_w + 1;              % counting iteration for w
-                    err_w = max(abs((w-wx)/wx));    % relative difference of w
+                    err_w = max(abs((w-wx)./wx));    % relative difference of w
                     if (err_w<err_w_min)
                         err_w_min= err_w;  % recording minimum relative difference of  w
                         wxx = wx;  % recording w which minimizes deviation of total sld fraction from 1
@@ -2289,10 +2313,10 @@ classdef caco3_test
                 pt = ptx;
                 time = time +dt;
                 
-                d13c_ocni = 0d0;
-                d18o_ocni = 0d0;
-                d13c_blk = zeros(1, global_var.nz);
-                d18o_blk = zeros(1, global_var.nz);
+%                 d13c_ocni = 0d0;
+%                 d18o_ocni = 0d0;
+%                 d13c_blk = zeros(1, global_var.nz);
+%                 d18o_blk = zeros(1, global_var.nz);
 
 %                 caco3_main.recordprofile(int_count, global_var.nz, global_var.z, age, pt, global_var.msed, wi, rho, cc, ccx, dic, dicx, alk, alkx, co3, co3x, co3sat ...
 %                     , rcc, pro, o2x, oxco2, anco2, om, global_var.mom, global_var.mcc, d13c_ocni, d18o_ocni, up,dwn, cnr, adf, global_var.nspcc, ptx, w, frt, prox, omx, d13c_blk, d18o_blk);

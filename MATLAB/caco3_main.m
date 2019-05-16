@@ -19,7 +19,7 @@ classdef caco3_main
     % ===================================
     properties (Constant)
         
-        nspcc = 4;  % if def_sense: 12;      % number of CaCO3 species
+        nspcc = 4;  % default: 4; if def_sense: 12;  if def_track2: 42; if def_size: 8    % number of CaCO3 species
         ztot=500d0; % if def_sense: 50.0d0;   % cm , total sediment thickness
         nz = 100;       % grid number
         tol = 1d-8; % 1d-6    % tolerance of error
@@ -37,8 +37,8 @@ classdef caco3_main
         msed = 258.16d0;  % g/mol arbitrary sediment g/mol assuming kaolinite ( 	Al2Si2O5(OH)4 )
         mcc = 100d0;  % g/mol CaCO3
         ox2om = 1.3d0;  % o2/om ratio for om decomposition (Emerson 1985; Archer 1991)
-        om2cc = 0.666d0;   % rain ratio of organic matter to calcite
-        %   om2cc = 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
+        % om2cc = 0.666d0;   % rain ratio of organic matter to calcite
+        om2cc = 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
         % :: om2cc = 0.5d0  % rain ratio of organic matter to calcite
         ncc = 4.5d0;   % (Archer et al. 1989) reaction order for caco3 dissolution
         
@@ -85,7 +85,7 @@ classdef caco3_main
         
         %        kcci = 10.0d0*365.25d0      % /yr; a reference caco3 dissolution rate const.
         kcci = 1d0*365.25d0         % /yr; cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
-        %        kcci = 0d0*365.25d0        % /yr; no dissolution
+        %        kcci = 0d0*365.25d0        % /yr; if def_nodissolve 
     end
     
     properties
@@ -816,7 +816,7 @@ classdef caco3_main
         
         function [ccx,dicx,alkx,rcc,dt, flg_500, itr] = calccaco3sys(ccx,dicx,alkx,rcc,dt, nspcc,dic,alk,dep,sal,tmp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic, ...
                 w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc, nz, ...
-                tol, poroi, flg_500, fact, alki,dici,ccx_th , def_nonrec, def_sparse, def_showiter)
+                tol, poroi, flg_500, fact, alki,dici,ccx_th , def_nonrec, def_sparse, def_showiter, def_sense)
             
             %% ~~~~~~~~~~~~~~~~~~~~~~ CaCO3 solid, ALK and DIC  calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             
@@ -947,6 +947,7 @@ classdef caco3_main
                 end
                 
                 % todo from here
+                % % TODO: add mocsy option here 
                 
                 for iz = 1:nz
                     row = 1 + (iz-1)*nsp;
@@ -1272,10 +1273,10 @@ classdef caco3_main
                     
                     %                    call dgesv(nmx,int(1),amx,nmx,ipiv,ymx,nmx,infobls)
                     ymx = matrixDivide(amx,ymx);
-                    %                     fprintf('ymx after \n');
-                    %                     for iz=1:nmx
-                    %                         fprintf('%17.16e \n', ymx(iz));
-                    %                     end
+%                                         fprintf('ymx after \n');
+%                                          for iz=1:nmx
+%                                              fprintf('%17.16e \n', ymx(iz));
+%                                          end
                     
                 else
                     %  slowest way of using sparse matrix solver
@@ -1785,7 +1786,7 @@ classdef caco3_main
             
             if (itrec==0)
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_ptx-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_ptx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1794,7 +1795,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_ccx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1805,7 +1806,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_o2x-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_o2x-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
@@ -1814,7 +1815,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_omx-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_omx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
@@ -1823,7 +1824,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_ccx_sp-%3.3i.txt',itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
@@ -1833,7 +1834,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_sig-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_sig-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
@@ -1842,7 +1843,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_bur-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_bur-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
@@ -1852,7 +1853,7 @@ classdef caco3_main
             else
                 
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_ptx-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_ptx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1861,7 +1862,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_ccx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1872,7 +1873,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_o2x-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_o2x-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
@@ -1881,7 +1882,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_omx-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_omx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
@@ -1890,17 +1891,17 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_ccx_sp-%3.3i.txt',itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
-                    fprintf(file_tmp,fmt,z(iz), age(iz),ccx(iz,:)*mcc/2.5d0*100d0);
+                    fprintf(file_tmp,fmt,z(iz), age(iz),ccx(iz,:)*mcc/rho(iz)*100d0);
                 end
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_sig-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_sig-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
@@ -1909,7 +1910,7 @@ classdef caco3_main
                 fclose(file_tmp)
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./recprofile_dt_1e6_int10/matlab_bur-%3.3i.txt',itrec);
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_bur-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
@@ -1957,7 +1958,7 @@ classdef caco3_main
             cntrec = 1;  % rec number (increasing with recording done )
             if(~def_nonrec)
                 % open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
-                str = sprintf('matlab_rectime.txt');
+                str = sprintf('./01_recprofile_fickian_nosig_default/matlab_rectime.txt');
                 file_tmp = fopen(str,'wt');
                 for itrec=1:nrec
                     %write(file_tmp,*) rectime(itrec)  % recording when records are made
@@ -2125,7 +2126,7 @@ classdef caco3_main
                             cntsp=cntsp+1;           % new species assinged
                             d18o_sp(cntsp)=d18o_ocn;
                             d13c_sp(cntsp)=d13c_ocn;
-                            ccflx = 0d0;
+                            ccflx = zeros(1, nspcc);
                             ccflx(cntsp) = ccflxi;
                         end
                     elseif (time-time_spn>time_trs/10d0 && time-time_spn<=time_trs/10d0*9d0)
@@ -2133,7 +2134,7 @@ classdef caco3_main
                             cntsp=cntsp+1;
                             d18o_sp(cntsp)=d18o_ocn;
                             d13c_sp(cntsp)=d13c_ocn;
-                            ccflx = 0d0;
+                            ccflx = zeros(1, nspcc);
                             ccflx(cntsp) = ccflxi;
                         end
                     elseif  (time-time_spn>time_trs/10d0*9d0)
@@ -2141,7 +2142,7 @@ classdef caco3_main
                             cntsp=cntsp+1;
                             d18o_sp(cntsp)=d18o_ocn;
                             d13c_sp(cntsp)=d13c_ocn;
-                            ccflx = 0d0;
+                            ccflx = zeros(1, nspcc);
                             ccflx(cntsp) = ccflxi;
                         end
                     end
@@ -2165,7 +2166,7 @@ classdef caco3_main
             elseif (time>time_spn+time_trs)     % after event
                 d13c_ocn = d13c_ocni;        % now again initial values
                 d18o_ocn = d18o_ocni;
-                ccflx = 0d0;
+                ccflx = zeros(1, nspcc);
                 ccflx(1) = ccflxi;  % allowing only caco3 flux with initial signal values
                 if(def_track2)
                     if (cntsp+1~=nspcc)  % checking used caco3 species number is enough and necessary
@@ -2181,7 +2182,7 @@ classdef caco3_main
                     ccflx(cntsp+1) = ccflxi;
                 end %# if
                 if(def_size)
-                    ccflx = 0d0;
+                    ccflx = zeros(1, nspcc);
                     flxfin=flxfini;
                     ccflx(1) = (1d0-flxfin)*ccflxi;  % fine species
                     ccflx(5) = flxfin*ccflxi;  % coarse species
@@ -2189,7 +2190,7 @@ classdef caco3_main
                 if(def_biotest)
                     d13c_ocn = d13c_ocnf;   % finish with final value
                     d18o_ocn = d18o_ocni;
-                    ccflx = 0d0;
+                    ccflx = zeros(1, nspcc);
                     ccflx(3) = ccflxi;  % caco3 species with d13c_ocnf and d18o_ocni
                 end %# if
             end
