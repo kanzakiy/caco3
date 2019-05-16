@@ -8,7 +8,7 @@ classdef caco3_test
         
         function bc = caco3_set_boundary_cond(global_var)
             
-            bc.ccflxi = 12d-6;      % mol (CaCO3) cm-2 yr-1  % a reference caco3 flux; Emerson and Archer (1990)
+            bc.ccflxi = 10d-6;      % mol (CaCO3) cm-2 yr-1  % a reference caco3 flux; Emerson and Archer (1990)
             bc.omflx = 12d-6;       % mol cm-2 yr-1       % a reference om flux; Emerson and Archer (1990)
             bc.detflx = 180d-6;     % g cm-2 yr-1  % a reference detrital flux; MUDS input http://forecast.uchicago.edu/Projects/muds.html
             bc.om = 1d-8*ones(1,global_var.nz);           % assume an arbitrary low conc.
@@ -728,7 +728,7 @@ classdef caco3_test
             time = 0d0; % model time [yr]
             it = 1; % integration count
             nt = 10; % total integration
-            dt = 1d6; % time step [yr]
+            dt = 1d2; % time step [yr]
             
             rho = 2.5d0*ones(1, global_var.nz); % assume here density (this is going to be calculated based on solid phase composition )
             
@@ -1397,7 +1397,7 @@ classdef caco3_test
             
             time = 0d0; % model time [yr]
             it = 1; % integration count
-            nt = 10; % total integration
+            nt = 20; % total integration
             dt = 1d4; % time step [yr]
             
             rho = 2.5d0*ones(global_var.nz, 1); % assume here density (this is going to be calculated based on solid phase composition )
