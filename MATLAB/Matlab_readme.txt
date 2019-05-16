@@ -4,7 +4,16 @@ CaCO3 therdomynamic subroutines & functions in caco3_therm.m
 Main code caco3_main.m
 Test functions in caco3_test.m 
 
-Need BLAS libraries 
+Need BLAS libraries - follow instructions on https://www.mathworks.com/help/matlab/matlab_external/calling-lapack-and-blas-functions-from-mex-files.html 
+to build and copy the MEX file matrixDivide.c to your local matlab working-directory:
+
+copyfile(fullfile(matlabroot,'extern','examples','refbook','matrixDivide.c'),'.')
+fileattrib('matrixDivide.c','+w')
+mex -v matrixDivide.c -lmwlapack
+
+then can be used as:
+X = matrixDivide(A,B)
+
 
 To run the model without signal tracking, e.g.:
 caco3_test.chk_through(2.0, 35.0, 4.0)
