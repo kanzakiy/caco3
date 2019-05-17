@@ -25,7 +25,7 @@ classdef caco3_therm
             calceq1_val=10.0d0^(-calceq1_val);
             
             % see Zeebe and Wolf-Gladrow (2001) Appendix A.11)
-            calceq1_val=calceq1_val*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d0-3.0d0-0.1475d0-3.0d0*tmp)*pres*pres)/83.131d0/tmp_k);
+            calceq1_val=calceq1_val*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k);
             
         end %function calceq1
         
@@ -48,7 +48,7 @@ classdef caco3_therm
             calceq2_val=10.0d0^(-calceq2_val);
             
            % see Zeebe and Wolf-Gladrow (2001) Appendix A.11)
-           calceq2_val=calceq2_val*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d0-3.0d0+0.0877d0-3.0d0*tmp)*pres*pres)/83.131d0/tmp_k);
+           calceq2_val=calceq2_val*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d-3+0.0877d-3*tmp)*pres*pres)/83.131d0/tmp_k);
             
             
         end %function calceq2

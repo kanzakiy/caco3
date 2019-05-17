@@ -287,7 +287,7 @@ classdef caco3_test
             for isp=1:global_var.nspcc+2
                 %     write(dumchr(1),'(i3.3)') isp
                 %     open(unit=file_tmp,file='./chk_trans_sp-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('matlab_chk_trans_sp-%3.3i.txt',isp);
+                str = sprintf('chk_trans_sp-%3.3i.txt',isp);
                 file_tmp = fopen(str,'wt');
                 
                 for iz=1:global_var.nz
@@ -1339,14 +1339,17 @@ classdef caco3_test
             
             
             beta = 1.00000000005d0;  % a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
-            [global_var.dz,global_var.z] = caco3_main.makegrid(beta,global_var.nz, global_var.ztot, global_var.def_recgrid);
+            [global_var.dz,global_var.z] = ...
+                caco3_main.makegrid(beta,global_var.nz, global_var.ztot, global_var.def_recgrid);
             
             
             %            global_var = caco3_main.getporosity(global_var.z, global_var); % assume porosity profile
-            [global_var.poro, global_var.porof, global_var.sporof, global_var.sporo, global_var.sporoi] = caco3_main.getporosity(global_var.z, global_var.poroi, global_var.nz);      % assume porosity profile
+            [global_var.poro, global_var.porof, global_var.sporof, global_var.sporo, global_var.sporoi] = ...
+                caco3_main.getporosity(global_var.z, global_var.poroi, global_var.nz);      % assume porosity profile
             %%%%%%%%%%%%% flx assignement and initial guess for burial rate %%%%%%%%%%%%%%%%%%%%%%
             % assume fluxes of om, cc and clay, required to calculate burial velocity
-            [omflx, detflx, ccflx] = caco3_main.flxstat(global_var.om2cc, bc.ccflxi, global_var.mcc, global_var.nspcc);
+            [omflx, detflx, ccflx] = ...
+                caco3_main.flxstat(global_var.om2cc, bc.ccflxi, global_var.mcc, global_var.nspcc);
             %            fprintf('ccflx %17.16e \n', ccflx);
             %            fprintf('om2cc, ccflxi, detflx, omflx, sum(ccflx) \n');
             %            fprintf('%17.16e %17.16e %17.16e %17.16e %17.16e \n', global_var.om2cc, bc.ccflxi, detflx, omflx, sum(ccflx));
@@ -1359,7 +1362,8 @@ classdef caco3_test
             
             % initial guess of burial profile, requiring porosity profile
             % w = burial rate, wi = burial rate initial guess
-            [w, wi] = caco3_main.burial_pre(detflx,ccflx,global_var.msed,mvsed,mvcc,global_var.poroi, global_var.nz);
+            [w, wi] = ...
+                caco3_main.burial_pre(detflx,ccflx,global_var.msed,mvsed,mvcc,global_var.poroi, global_var.nz);
             
             % % depth -age conversion
             age = caco3_main.dep2age(global_var.dz, w, global_var.nz);
@@ -1370,22 +1374,30 @@ classdef caco3_test
             
             % % make transition matrix
             [trans,izrec,izrec2,izml,mix_type.nonlocal] = ...
-                caco3_main.make_transmx(mix_type.labs,global_var.nspcc,mix_type.turbo2,mix_type.nobio,global_var.dz,global_var.sporo,global_var.nz,global_var.z, global_var.zml_ref, global_var.def_size);
+                caco3_main.make_transmx(mix_type.labs,global_var.nspcc,mix_type.turbo2 ...
+                ,mix_type.nobio,global_var.dz,global_var.sporo,global_var.nz,global_var.z...
+                , global_var.zml_ref, global_var.def_size);
             
-            [keq1    ,keq2   ,keqcc  ,co3sat, dif_dic    ,dif_alk    ,dif_o2 ,kom, kcc, global_var] = caco3_main.coefs(tmp,sal,dep, global_var);
+            [keq1    ,keq2   ,keqcc  ,co3sat, dif_dic    ,dif_alk    ,dif_o2 ,kom, kcc, global_var] = ...
+                caco3_main.coefs(tmp,sal,dep, global_var);
             
             %   INITIAL CONDITIONS %
-            bc.o2 = bc.o2i*1d-6/1d3 * ones(1, global_var.nz);	% o2 conc. in uM converted to mol/cm3
+            % bc.o2 = bc.o2i*1d-6/1d3 * ones(1, global_var.nz);	% o2 conc. in uM converted to mol/cm3  YK modified 
+            o2 = bc.o2i*1d-6/1d3 * ones(1, global_var.nz);	% o2 conc. in uM converted to mol/cm3  YK added 
             cc = 1d-8 * ones(global_var.nz, global_var.nspcc);	% mol cm-3 sld; concentration of caco3, assume an arbitrary low conc.
             dic = bc.dici*1d-6/1d3 * ones(1, global_var.nz);  	% mol/cm3; factor is added to change uM to mol/cm3
             alk = bc.alki*1d-6/1d3 * ones(1, global_var.nz);   	% mol/cm3
             pt = 1d-8*ones(1, global_var.nz);                   % mol cm-3 sld; clay conc., assume an arbitrary low conc.
             
+            om = 1d-8*ones(1, global_var.nz);  % YK added 
+            
             % calling subroutine to calculate all aqueous co2 species and pH
             [pro,co2,hco3,co3,infosbr] = caco3_therm.calcspecies(dic,alk,tmp,sal,dep);
             
-            omx = bc.om;
-            o2x = bc.o2;
+            % omx = bc.om;  % YK modified
+            % o2x = bc.o2; % YK modified
+            omx = om; % YK added 
+            o2x = o2; % YK added
             ccx = cc;
             dicx = dic;
             alkx = alk ;
@@ -1398,7 +1410,7 @@ classdef caco3_test
             time = 0d0; % model time [yr]
             it = 1; % integration count
             nt = 20; % total integration
-            dt = 1d4; % time step [yr]
+            dt = 1d2; % time step [yr]
             
             rho = 2.5d0*ones(global_var.nz, 1); % assume here density (this is going to be calculated based on solid phase composition )
             
@@ -1435,11 +1447,13 @@ classdef caco3_test
                         % izox: integer for grid number of zox
                         % kom: degradation rate consts. for each nz grids
                         [omx, izox, kom] = ...
-                            caco3_main.omcalc(bc.oxic, bc.anoxic,o2x,bc.om, global_var.komi,global_var.nz,global_var.sporo,global_var.sporoi,global_var.sporof, w, wi, dt, up, dwn, cnr, adf,trans, ...
+                            caco3_main.omcalc(bc.oxic, bc.anoxic,o2x,om, global_var.komi,global_var.nz,global_var.sporo ...  % YK; bo.om --> om
+                            ,global_var.sporoi,global_var.sporof, w, wi, dt, up, dwn, cnr, adf,trans, ...
                             global_var.nspcc, mix_type.labs,mix_type.turbo2, mix_type.nonlocal, omflx, global_var.poro, global_var.dz, global_var.o2th);
                         % calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
                         [omadv,omdec,omdif,omrain,omres,omtflx] = ...
-                            caco3_main.calcflxom(omflx,global_var.sporo,bc.om,omx,dt,w,global_var.dz,global_var.z,global_var.nz,mix_type.turbo2,mix_type.labs, global_var.poro,up,dwn,cnr,adf,rho, global_var.mom,trans,kom,global_var.sporof);
+                            caco3_main.calcflxom(omflx,global_var.sporo,om,omx,dt,w,global_var.dz,global_var.z,global_var.nz ...  % YK; bo.om --> om
+                            ,mix_type.turbo2,mix_type.labs, global_var.poro,up,dwn,cnr,adf,rho, global_var.mom,trans,kom,global_var.sporof);
                         
                         fprintf('izox = %i \n',izox);      % sb omcalc calculates izox, which is the deepest grid where o2 >=0.
                         
@@ -1458,14 +1472,18 @@ classdef caco3_test
                         
                         if (izox == global_var.nz)     % fully oxic; lower boundary condition ---> no diffusive out flow
                             % o2 calculation when o2 penetration depth (zox) is the same as bottom depth.
-                            o2x = caco3_main.o2calc_ox(izox,global_var.nz,global_var.poro,bc.o2,kom,omx,global_var.sporo,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
+                            o2x = caco3_main.o2calc_ox(izox,global_var.nz,global_var.poro,o2,kom,omx,global_var.sporo ... %YK; bc.o2--> o2 
+                                ,dif_o2,global_var.dz ,dt, global_var.ox2om, bc.o2i);
                             %  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations)
-                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_ox(global_var.nz,global_var.sporo,kom,omx,global_var.dz,global_var.poro,dif_o2,dt,bc.o2,o2x, global_var.ox2om, bc.o2i);
+                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_ox(global_var.nz,global_var.sporo,kom,omx,global_var.dz...
+                            ,global_var.poro,dif_o2,dt,o2,o2x, global_var.ox2om, bc.o2i);  %YK; bc.o2--> o2 
                         else        %% if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
                             % o2 calculation when o2 is depleted within the calculation domain.
-                            o2x = caco3_main.o2calc_sbox(izox,global_var.nz,global_var.poro,bc.o2,kom,omx,global_var.sporo,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
+                            o2x = caco3_main.o2calc_sbox(izox,global_var.nz,global_var.poro,o2,kom,omx,global_var.sporo ... %YK; bc.o2--> o2 
+                                ,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
                             % fluxes relevant to oxygen
-                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_sbox(global_var.nz,global_var.sporo,kom,omx,global_var.dz,global_var.poro,dif_o2,dt,bc.o2,o2x,izox, global_var.ox2om, bc.o2i);
+                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_sbox(global_var.nz,global_var.sporo,kom ...
+                                ,omx,global_var.dz,global_var.poro,dif_o2,dt,o2,o2x,izox, global_var.ox2om, bc.o2i);  %YK; bc.o2--> o2 
                         end
                         
                         %                 % showing intermediate results on screen
@@ -1781,28 +1799,33 @@ classdef caco3_test
 %            global_var.om2cc = 0.7d0;   % rain ratio of organic matter to calcite
 
             % open files for output signal at 3 different depths
-            file_sigmly = sprintf('./recprofile_signaltrack_fickian/matlab_sigmly.txt');
+            file_sigmly = sprintf('./resprofiles/sigmly.txt');
             file_sigmlyid = fopen(file_sigmly,'wt');
-            file_sigmlyd = sprintf('./recprofile_signaltrack_fickian/matlab_sigmlyd.txt');
+            file_sigmlyd = sprintf('./resprofiles/sigmlyd.txt');
             file_sigmlydid = fopen(file_sigmlyd,'wt');
-            file_sigbtm = sprintf('./recprofile_signaltrack_fickian/matlab_sigbtm.txt');
+            file_sigbtm = sprintf('./resprofiles/sigbtm.txt');
             file_sigbtmid = fopen(file_sigbtm,'wt');
-            file_bound = sprintf('./recprofile_signaltrack_fickian/matlab_bound.txt');
+            file_bound = sprintf('./resprofiles/bound.txt');
             file_boundid = fopen(file_bound,'wt');
+            file_frac = sprintf('./resprofiles/frac.txt');
+            file_fracid = fopen(file_frac,'wt');
             
             
             flg_500 = false;    % error in calculation?
             
             
             beta = 1.00000000005d0;     % a parameter to make a grid; closer to 1, grid space is more concentrated around the sediment-water interface (SWI)
-            [global_var.dz,global_var.z] = caco3_main.makegrid(beta,global_var.nz, global_var.ztot, global_var.def_recgrid);
+            [global_var.dz,global_var.z] = ...
+                caco3_main.makegrid(beta,global_var.nz, global_var.ztot, global_var.def_recgrid);
             
             
             %            global_var = caco3_main.getporosity(global_var.z, global_var); % assume porosity profile
-            [global_var.poro, global_var.porof, global_var.sporof, global_var.sporo, global_var.sporoi] = caco3_main.getporosity(global_var.z, global_var.poroi, global_var.nz);      % assume porosity profile
+            [global_var.poro, global_var.porof, global_var.sporof, global_var.sporo, global_var.sporoi] = ...
+                caco3_main.getporosity(global_var.z, global_var.poroi, global_var.nz);      % assume porosity profile
             %%%%%%%%%%%%% flx assignement and initial guess for burial rate %%%%%%%%%%%%%%%%%%%%%%
             % assume fluxes of om, cc and clay, required to calculate burial velocity
-            [omflx, detflx, ccflx] = caco3_main.flxstat(global_var.om2cc, bc.ccflxi, global_var.mcc, global_var.nspcc);
+            [omflx, detflx, ccflx] = ...
+                caco3_main.flxstat(global_var.om2cc, bc.ccflxi, global_var.mcc, global_var.nspcc);
             %            fprintf('ccflx %17.16e \n', ccflx);
                         fprintf('om2cc, ccflxi, detflx, omflx, sum(ccflx) \n');
                         fprintf('%17.16e %17.16e %17.16e %17.16e %17.16e \n', global_var.om2cc, bc.ccflxi, detflx, omflx, sum(ccflx));
@@ -1815,7 +1838,8 @@ classdef caco3_test
             
             % initial guess of burial profile, requiring porosity profile
             % w = burial rate, wi = burial rate initial guess
-            [w, wi] = caco3_main.burial_pre(detflx,ccflx,global_var.msed,mvsed,mvcc,global_var.poroi, global_var.nz);
+            [w, wi] = ...
+                caco3_main.burial_pre(detflx,ccflx,global_var.msed,mvsed,mvcc,global_var.poroi, global_var.nz);
             
             % % depth -age conversion
             age = caco3_main.dep2age(global_var.dz, w, global_var.nz);
@@ -1825,7 +1849,9 @@ classdef caco3_test
             
             %%% ~~~~~~~~~~~~~~ set recording time
             % call recordtime()
-            [rectime, cntrec, time_spn, time_trs, time_aft] = caco3_main.recordtime(global_var.nrec, wi, global_var.ztot, global_var.def_biotest, global_var.def_sense, global_var.def_nonrec);
+            [rectime, cntrec, time_spn, time_trs, time_aft] = ...
+                caco3_main.recordtime(global_var.nrec, wi, global_var.ztot ...
+                , global_var.def_biotest, global_var.def_sense, global_var.def_nonrec);
             
             % water depth, i and f denote initial and final values
             depi = dep_in;  % depth before event
@@ -1846,28 +1872,38 @@ classdef caco3_test
             d18o_ocn = 0d0;
             % end-member signal assignment
             % call sig2sp_pre()
-            [d13c_sp,d18o_sp] = caco3_main.sig2sp_pre(d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf, global_var.def_sense, global_var.def_size, global_var.nspcc);
+            [d13c_sp,d18o_sp] = ...
+                caco3_main.sig2sp_pre(d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf ...
+                , global_var.def_sense, global_var.def_size, global_var.nspcc);
             
             
             
             % % make transition matrix
             [trans,izrec,izrec2,izml,mix_type.nonlocal] = ...
-                caco3_main.make_transmx(mix_type.labs,global_var.nspcc,mix_type.turbo2,mix_type.nobio,global_var.dz,global_var.sporo,global_var.nz,global_var.z, global_var.zml_ref, global_var.def_size);
-            
-            [keq1    ,keq2   ,keqcc  ,co3sat, dif_dic    ,dif_alk    ,dif_o2 ,kom, kcc, global_var] = caco3_main.coefs(tmp,sal,dep, global_var);
+                caco3_main.make_transmx(mix_type.labs,global_var.nspcc,mix_type.turbo2 ...
+                ,mix_type.nobio,global_var.dz,global_var.sporo,global_var.nz,global_var.z...
+                , global_var.zml_ref, global_var.def_size);
+                
+            [keq1    ,keq2   ,keqcc  ,co3sat, dif_dic    ,dif_alk    ,dif_o2 ,kom, kcc, global_var] = ...
+                caco3_main.coefs(tmp,sal,dep, global_var);
             
             %   INITIAL CONDITIONS %
-            bc.o2 = bc.o2i*1d-6/1d3 * ones(1, global_var.nz);	% o2 conc. in uM converted to mol/cm3
+            % bc.o2 = bc.o2i*1d-6/1d3 * ones(1, global_var.nz);	% o2 conc. in uM converted to mol/cm3   % YK commented out 
+            o2 = bc.o2i*1d-6/1d3 * ones(1, global_var.nz);	% o2 conc. in uM converted to mol/cm3   % YK added 
             cc = 1d-8 * ones(global_var.nz, global_var.nspcc);	% mol cm-3 sld; concentration of caco3, assume an arbitrary low conc.
             dic = bc.dici*1d-6/1d3 * ones(1, global_var.nz);  	% mol/cm3; factor is added to change uM to mol/cm3
             alk = bc.alki*1d-6/1d3 * ones(1, global_var.nz);   	% mol/cm3
             pt = 1d-8*ones(1, global_var.nz);                   % mol cm-3 sld; clay conc., assume an arbitrary low conc.
             
+            om = 1d-8*ones(1, global_var.nz);                   % mol cm-3 sld; clay conc., assume an arbitrary low conc.  % YK added 
+            
             % calling subroutine to calculate all aqueous co2 species and pH
             [pro,co2,hco3,co3,infosbr] = caco3_therm.calcspecies(dic,alk,tmp,sal,dep);
             
-            omx = bc.om;
-            o2x = bc.o2;
+            % omx = bc.om;  % YK commented out 
+            % o2x = bc.o2;  % YK commented out 
+            omx = om;  % YK added 
+            o2x = o2;  % YK added 
             ccx = cc;
             dicx = dic;
             alkx = alk ;
@@ -1899,15 +1935,16 @@ classdef caco3_test
                 if(~global_var.def_sense)   % do signal tracking
                     
                     % determine time step dt by calling timestep(time,nt_spn,nt_trs,nt_aft,dt) where nt_xx denotes total iteration number
-                    nt_spn = 800.0;     % timesteps for spin-up
-                    nt_trs = 5000.0;    % timesteps close to & during event (signal transition)
-                    nt_aft = 1000.0;    % timesteps after event
+                    nt_spn = 800;     % timesteps for spin-up % YK modified 
+                    nt_trs = 5000;    % timesteps close to & during event (signal transition) % YK modified 
+                    nt_aft = 1000;    % timesteps after event  % YK modified 
                     
                     [dt] = caco3_main.timestep(time, nt_spn, nt_trs, nt_aft, time_spn, time_trs, dt);
                     
                     [d13c_ocn, d18o_ocn, ccflx, d18o_sp, d13c_sp] = ...
                         caco3_main.signal_flx(time, time_spn,time_trs,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf ...
-                        ,ccflx,bc.ccflxi,d18o_sp,d13c_sp,int_count,global_var.nspcc,flxfini,flxfinf, global_var.def_track2, global_var.def_size, global_var.def_biotest);
+                        ,ccflx,bc.ccflxi,d18o_sp,d13c_sp,int_count,global_var.nspcc,flxfini,flxfinf, global_var.def_track2 ...
+                        , global_var.def_size, global_var.def_biotest);
                     
                     [dep] = caco3_main.bdcnd(time, time_spn, time_trs, depi, depf, global_var.def_biotest);
                 end
@@ -1967,6 +2004,9 @@ classdef caco3_test
 %                     end
                     dw = zeros(1, global_var.nz);                       % burial rate change
                     
+                    oxco2 = zeros(1, global_var.nz);  % oxic degradation of om; here initially assumed 0  % YK added 
+                    anco2 = zeros(1, global_var.nz);   % anoxic degradation of om; here initially assumed 0 % YK added 
+                    
                     itr_om_o2 = 0;        % iteration number for om and o2 calcuation
                     zox_error = 1d4;  	% error in ieration for zox
                     minerr= 1d4;    % recording minimum relative difference in zox from previously considered zox
@@ -1977,11 +2017,14 @@ classdef caco3_test
                         % izox: integer for grid number of zox
                         % kom: degradation rate consts. for each nz grids
                         [omx, izox, kom] = ...
-                            caco3_main.omcalc(bc.oxic, bc.anoxic,o2x,bc.om, global_var.komi,global_var.nz,global_var.sporo,global_var.sporoi,global_var.sporof, w, wi, dt, up, dwn, cnr, adf,trans, ...
+                            caco3_main.omcalc(bc.oxic, bc.anoxic,o2x,om, global_var.komi,global_var.nz ...  % YK changed bc.om to om
+                            ,global_var.sporo,global_var.sporoi,global_var.sporof, w, wi, dt, up, dwn, cnr, adf,trans, ...
                             global_var.nspcc, mix_type.labs,mix_type.turbo2, mix_type.nonlocal, omflx, global_var.poro, global_var.dz, global_var.o2th);
                         % calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
                         [omadv,omdec,omdif,omrain,omres,omtflx] = ...
-                            caco3_main.calcflxom(omflx,global_var.sporo,bc.om,omx,dt,w,global_var.dz,global_var.z,global_var.nz,mix_type.turbo2,mix_type.labs, global_var.poro,up,dwn,cnr,adf,rho, global_var.mom,trans,kom,global_var.sporof);
+                            caco3_main.calcflxom(omflx,global_var.sporo,om,omx,dt,w,global_var.dz ...  % YK changed bc.om to om
+                            ,global_var.z,global_var.nz,mix_type.turbo2,mix_type.labs, global_var.poro ...
+                            ,up,dwn,cnr,adf,rho, global_var.mom,trans,kom,global_var.sporof);
                         
 %                        fprintf('izox = %i \n',izox);      % sb omcalc calculates izox, which is the deepest grid where o2 >=0.
                         
@@ -2000,14 +2043,18 @@ classdef caco3_test
                         
                         if (izox == global_var.nz)     % fully oxic; lower boundary condition ---> no diffusive out flow
                             % o2 calculation when o2 penetration depth (zox) is the same as bottom depth.
-                            o2x = caco3_main.o2calc_ox(izox,global_var.nz,global_var.poro,bc.o2,kom,omx,global_var.sporo,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
+                            o2x = caco3_main.o2calc_ox(izox,global_var.nz,global_var.poro,o2 ...  % YK changed bc.o2 to o2
+                                ,kom,omx,global_var.sporo,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
                             %  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations)
-                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_ox(global_var.nz,global_var.sporo,kom,omx,global_var.dz,global_var.poro,dif_o2,dt,bc.o2,o2x, global_var.ox2om, bc.o2i);
+                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_ox(global_var.nz,global_var.sporo ...
+                                ,kom,omx,global_var.dz,global_var.poro,dif_o2,dt,o2,o2x, global_var.ox2om, bc.o2i); % YK changed bc.o2 to o2
                         else        %% if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
                             % o2 calculation when o2 is depleted within the calculation domain.
-                            o2x = caco3_main.o2calc_sbox(izox,global_var.nz,global_var.poro,bc.o2,kom,omx,global_var.sporo,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
+                            o2x = caco3_main.o2calc_sbox(izox,global_var.nz,global_var.poro,o2 ...   % YK changed bc.o2 to o2
+                                ,kom,omx,global_var.sporo,dif_o2,global_var.dz,dt, global_var.ox2om, bc.o2i);
                             % fluxes relevant to oxygen
-                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_sbox(global_var.nz,global_var.sporo,kom,omx,global_var.dz,global_var.poro,dif_o2,dt,bc.o2,o2x,izox, global_var.ox2om, bc.o2i);
+                            [o2dec,o2dif,o2tflx,o2res] = caco3_main.calcflxo2_sbox(global_var.nz,global_var.sporo,kom,omx ...
+                                ,global_var.dz,global_var.poro,dif_o2,dt,o2,o2x,izox, global_var.ox2om, bc.o2i);   % YK changed bc.o2 to o2
                         end
                         
                         %                 % showing intermediate results on screen
@@ -2133,7 +2180,8 @@ classdef caco3_test
                         caco3_main.calccaco3sys(ccx,dicx,alkx,rcc, dt, global_var.nspcc,dic,alk,dep,sal,tmp,mix_type.labs,mix_type.turbo2,mix_type.nonlocal, ...
                         global_var.sporo, global_var.sporoi, global_var.sporof, global_var.poro, dif_alk, dif_dic, ...
                         w, up, dwn, cnr, adf, global_var.dz, trans, cc, oxco2, anco2, co3sat, kcc, ccflx, global_var.ncc, global_var.nz, ...
-                        global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec, global_var.def_sparse, global_var.def_showiter, global_var.def_sense);
+                        global_var.tol, global_var.poroi, flg_500, global_var.fact, bc.alki,bc.dici, global_var.ccx_th, global_var.def_nonrec ...
+                        , global_var.def_sparse, global_var.def_showiter, global_var.def_sense);
                     
                     if(flg_500)
                         msg = 'error after calccaco3sys, STOP.';
@@ -2151,7 +2199,8 @@ classdef caco3_test
                     %          % calculation of fluxes relevant to caco3 and co2 system
                     %             % call calcflxcaco3sys()
                     [cctflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres, dictflx,dicdis,dicdif,dicres,dicdec, dw] = ...
-                        caco3_main.calcflxcaco3sys(dw, global_var.nspcc, ccx, cc, ccflx,dt, global_var.dz, rcc, adf, up, dwn, cnr, w, dif_alk, dif_dic, dic, dicx, alk, alkx, oxco2, anco2, trans, ...
+                        caco3_main.calcflxcaco3sys(dw, global_var.nspcc, ccx, cc, ccflx,dt, global_var.dz, rcc, adf, up, dwn, cnr, w ...
+                        , dif_alk, dif_dic, dic, dicx, alk, alkx, oxco2, anco2, trans, ...
                         mix_type.turbo2, mix_type.labs,mix_type.nonlocal, global_var.sporof, int_count, global_var.nz, global_var.poro, global_var.sporo, ...
                         bc.dici,bc.alki, mvcc, global_var.tol);
                     
@@ -2173,7 +2222,8 @@ classdef caco3_test
                     % checking for total volume of solids, density and burial velocity
                     
                     % call getsldprop() % get solid property, rho (density) and frt (total vol.frac)
-                    [rho, frt] = caco3_main.getsldprop(global_var.nz, omx, ptx, ccx, global_var.nspcc, w, up, dwn, cnr, adf, global_var.z, global_var.mom, global_var.msed, global_var.mcc, mvom, mvsed, mvcc);
+                    [rho, frt] = caco3_main.getsldprop(global_var.nz, omx, ptx, ccx, global_var.nspcc ...
+                        , w, up, dwn, cnr, adf, global_var.z, global_var.mom, global_var.msed, global_var.mcc, mvom, mvsed, mvcc);
                     
                     err_f = max(abs(frt - 1d0));  % new error in total vol. fraction (must be 1 in theory)
                     %% ========= calculation of burial velocity =============================
@@ -2240,8 +2290,10 @@ classdef caco3_test
                 
                 if (time>=rectime(cntrec))
                     %        call recordprofile(cntrec )
-                    caco3_main.recordprofile(cntrec, global_var.nz, global_var.z, age, pt, global_var.msed, wi, rho, cc, ccx, dic, dicx, alk, alkx, co3, co3x, co3sat ...
-                        , rcc, pro, o2x, oxco2, anco2, bc.om, global_var.mom, global_var.mcc, d13c_ocni, d18o_ocni, up,dwn, cnr, adf, global_var.nspcc, ptx, w, frt, prox, omx, d13c_blk, d18o_blk)
+                    caco3_main.recordprofile(cntrec, global_var.nz, global_var.z, age, pt, global_var.msed ...
+                        , wi, rho, cc, ccx, dic, dicx, alk, alkx, co3, co3x, co3sat ...
+                        , rcc, pro, o2x, oxco2, anco2, bc.om, global_var.mom, global_var.mcc ...
+                        , d13c_ocni, d18o_ocni, up,dwn, cnr, adf, global_var.nspcc, ptx, w, frt, prox, omx, d13c_blk, d18o_blk)
                     
                     cntrec = cntrec + 1;
                     if (cntrec == global_var.nrec+1)
@@ -2254,8 +2306,9 @@ classdef caco3_test
                     ,d13c_blkf,d18o_blk,d18o_blkc,d18o_blkf,ccx,global_var.mcc,rho,ptx,global_var.msed,izrec2,global_var.nz, global_var.def_size)
                 %********************************************************************************************************************************  ADDED-END
                 
-                fprintf('error in frt: %17.16e \n', max(abs(frt - 1d0)));                                
-                
+                fprintf('error in frt: %17.16e \n', max(abs(frt - 1d0)));  
+                fmt=[repmat('%17.16e \t',1,2) '\n'];   % YK added 
+                fprintf(file_fracid,fmt, time, max(abs(frt - 1d0))); % YK added 
                 %%%%%%%%%%%%%%
                 
                 %% showing results on screen
@@ -2327,6 +2380,8 @@ classdef caco3_test
         fclose(file_sigmlyid);      % recording signals etc at just below mixed layer 
         fclose(file_sigmlydid);     % recording signals etc at depths of 2x mixed layer thickness 
         fclose(file_sigbtmid);      % % recording signals etc at bottom of sediment  
+        fclose(file_boundid);      % % boundary condition file closing  % YK added 
+        fclose(file_fracid);      % %   file recording total sld fraction closing  % YK added 
 %********************************************************************************************************************************  ADDED-END
 
             
