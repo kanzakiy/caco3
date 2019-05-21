@@ -9,11 +9,14 @@ import math
 caco3 profiles - simple ver.  
 """
 Workdir = "C:/cygwin64/home/YK/caco3/"  # where result files exist; figures are stored in the same file out of my laziness 
+##Workdir = "C:/cygwin64/home/YK/caco3/MATLAB/resprofiles/"
+Workdir = "C:/Users/YK/Desktop/Sed_res/test-translabs/profiles/python"
+Workdir += "/multi/oxanox_turbo2/cc-1.2e-05_rr-0.7nb-50kyr-6km/"
 
-nt = 10  # total number of time iteration 
+nt = 15  # total number of time iteration 
 nz = 100 # grid number 
 nsp = 4  # caco3 species number 
-dt = 100.  # time step [yr]
+dt = 1e3  # time step [yr]
 
 numstr = np.empty((nt),dtype='|S5')
 
@@ -80,7 +83,7 @@ ty = 0.8  # the same as above
 color=cm.jet(np.linspace(0,1,nt))  # color according to time 
 label = np.empty((nt),dtype='|S15')  # making labels according to time 
 for i in range(nt):
-    label[i]=str(i*dt/1e3)+' kyr'
+    label[i]=str((i+1)*dt/1e3)+' kyr'
 
 ##"""
 ##fig = plt.figure(figsize=(14,20)) # long

@@ -61,10 +61,11 @@ def sigplot(multi,python,test,ox,oxanox,labs,turbo2,nobio,filename,i,ax1,ax2,ax3
     Workdir += '/'
     
     # Otherwise, specify here directly the directory which store calculation results and remove comment-out
-    # Workdir = ./
+##    Workdir = './MATLAB/resprofiles/'
+    Workdir = './'
     
     rectime = np.loadtxt(Workdir+'rectime.txt')
-    frac = np.loadtxt(Workdir+'frac.txt')
+##    frac = np.loadtxt(Workdir+'frac.txt')
     sig = np.loadtxt(Workdir+'sigmly.txt')
     bound = np.loadtxt(Workdir+'bound.txt')
 
@@ -100,20 +101,20 @@ def main():
     turbo2 = np.zeros(nexp,dtype=bool)
     nobio = np.zeros(nexp,dtype=bool)
 
-    python= False
+    python= True
 
     multi[:]=True
-    test[:]=True
+    test[:]=False
     ox[:]=True
     oxanox[:]=True
     if nexp>1:nobio[1]=True
     if nexp>2:turbo2[2]=True
     # simulation file names are listed below
-    filename=np.array(['cc-1_1E-5_rr-6_9E-1_lc-test-50kyr-dis5-allsb'
+    filename=np.array(['cc-1.2e-05_rr-0.7-test-50kyr-5km'
                        ,'cc-1_1E-5_rr-6_9E-1_lc-test-50kyr-dis5-allsb'
                        ,'cc-1_1E-5_rr-6_9E-1_lc-test-50kyr-dis5-allsb'])
     # name below are used for figure
-    outname = '50kyr-5km-allsb_chk'
+    outname = '50kyr-5km-nonbio'
 
     fs=12
 
@@ -159,7 +160,7 @@ def main():
     ##fig.tight_layout()
     fig.subplots_adjust(left=0.1,bottom=0.1,wspace=0.06,hspace=0.2)
     # You need specify the directory where output is made 
-    Workdir = 'C:/Users/YK/Desktop/Sediment/'
+    Workdir = './'
     outfilename = Workdir+outname+".svg"
     plt.savefig(outfilename, transparent=True)
     subprocess.call('"C:\Program Files\Inkscape\inkscape.exe" -z -f ' \

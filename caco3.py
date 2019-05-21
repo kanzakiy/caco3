@@ -6,6 +6,8 @@ import numpy as np
 import os
 from scipy.sparse import lil_matrix,csr_matrix
 from scipy.sparse.linalg import spsolve
+import scipy.linalg as la
+import scipy.linalg.lapack as lapack
 
 np.set_printoptions(formatter={'float': '{:.2e}'.format})
 
@@ -59,6 +61,15 @@ def calceqcc(tmp,sal,dep):
                    +0.5e0*(-11.76e-3+0.3692e-3*tmp)*pres*pres)/83.131e0/tmp_k)
     return calceqcc
 
+def calceqw(tmp,sal,dep):
+    tmp_k=np.float64(tmp+273.15e0)
+    pres = np.float64(dep*100e0)
+    calceqw= 148.96502e0 -13847.26e0/tmp_k -23.6521e0*np.log(tmp_k) \
+        + (118.67e0/tmp_k -5.977e0 + 1.0495e0*np.log(tmp_k))*sal**0.5e0 - 0.01615e0*sal
+    calceqw=np.exp(calceqw)
+    calceqw*=np.exp((-(-25.60e0+0.2324e0*tmp-3.6246e-3*tmp*tmp)*pres+0.5e0*(-5.13e-3+0.0794e-3*tmp)*pres*pres)/83.131e0/tmp_k)
+    return calceqw
+
 def chk_caco3_therm():
     temp = 2e0
     sal = 35e0
@@ -96,27 +107,139 @@ def calcspecies(tmp,sal,dep,dic,alk,nz):
     info = 0
     k1=calceq1(tmp,sal,dep)
     k2=calceq2(tmp,sal,dep)
-    a=np.float64(1.)
+    a=np.zeros(nz,dtype=np.float64)
     b=np.zeros(nz,dtype=np.float64)
     c=np.zeros(nz,dtype=np.float64)
     pro=np.zeros(nz,dtype=np.float64)
     co2=np.zeros(nz,dtype=np.float64)
     hco3=np.zeros(nz,dtype=np.float64)
     co3=np.zeros(nz,dtype=np.float64)
+    a[:]=1e0
     b[:]=(1.-dic[:]/alk[:])*k1
     c[:]=(1.-2.*dic[:]/alk[:])*k1*k2
     pro[:]=(-b[:]+(b[:]*b[:]-4.*a*c[:])**0.5)*0.5
     if any(pro<0.):
            print '... unable to calculate ph'
-##           print pro
-##           print dic
-##           print alk
+#           print pro
+#           print dic
+#           print alk
            info = 1
+##    for iz in range(nz):
+##        p=np.poly1d([a[iz],b[iz],c[iz]])
+##        for ip in range(p.roots[np.isreal(p.roots)].shape[0]):
+##            if p.roots[np.isreal(p.roots)][ip]>0:
+##                pro[iz]=p.roots[np.isreal(p.roots)][ip]
+##                break
     co2[:]=alk[:]/(k1/pro[:]+2.*k1*k2/pro[:]/pro[:])
     hco3[:]=alk[:]/(1.+2.*k2/pro[:])
     co3[:]=alk[:]/(pro[:]/k2+2.)
-    return co2,hco3,co3,pro,info
+    db_dalk=np.zeros(nz,dtype=np.float64)
+    dc_dalk=np.zeros(nz,dtype=np.float64)
+    db_ddic=np.zeros(nz,dtype=np.float64)
+    dc_ddic=np.zeros(nz,dtype=np.float64)
+    dph_dalk=np.zeros(nz,dtype=np.float64)
+    dph_ddic=np.zeros(nz,dtype=np.float64)
+    dco3_dalk=np.zeros(nz,dtype=np.float64)
+    dco3_ddic=np.zeros(nz,dtype=np.float64)
+    db_dalk[:] = k1*(-1.)*dic[:]*(-1.)/alk[:]/alk[:]
+    dc_dalk[:] = k1*k2*(-2.)*dic[:]*(-1.)/alk[:]/alk[:]
+    db_ddic[:] = k1*(-1./alk[:])
+    dc_ddic[:] = k1*k2*(-2./alk[:])
+    dph_dalk[:] = -0.5*db_dalk[:] + 0.5*0.5*(b[:]*b[:]-4.*c[:])**(-0.5)\
+                  *(2.*b[:]*db_dalk[:] - 4.*dc_dalk[:])
+    dph_ddic[:] = -0.5*db_ddic[:] + 0.5*0.5*(b[:]*b[:]-4.*c[:])**(-0.5)\
+                  *(2.*b[:]*db_ddic[:] - 4.*dc_ddic[:])
+    dco3_dalk[:] = 1./(pro[:]/k2+2.) + alk[:]*(-1.)/((pro[:]/k2+2.)**2.)\
+                   *(1./k2)*dph_dalk[:]
+    dco3_ddic[:] = 0./(pro[:]/k2+2.) + alk[:]*(-1.)/((pro[:]/k2+2.)**2.)\
+                   *(1./k2)*dph_ddic[:]
+    return co2,hco3,co3,pro,dco3_ddic,dco3_dalk,info
+    
+def calcco2h2o(tmp,sal,dep,dic,alk,nz):
+    info=0
+    k1=calceq1(tmp,sal,dep)
+    k2=calceq2(tmp,sal,dep)
+    kw=calceqw(tmp,sal,dep)
+    a=np.zeros(nz,dtype=np.float64)
+    b=np.zeros(nz,dtype=np.float64)
+    c=np.zeros(nz,dtype=np.float64)
+    d=np.zeros(nz,dtype=np.float64)
+    e=np.zeros(nz,dtype=np.float64)
+    ph=np.zeros(nz,dtype=np.float64)
+    a[:]=1e0
+    b[:]=alk[:]+k1
+    c[:]=-(dic[:]-alk[:])*k1-kw+k1*k2
+    d[:]=-(2e0*dic[:]-alk[:])*k1*k2-k1*kw
+    e[:]=-k1*k2*kw
+    for iz in range(nz):
+        p=np.poly1d([a[iz],b[iz],c[iz],d[iz],e[iz]])
+        for ip in range(p.roots[np.isreal(p.roots)].shape[0]):
+            if p.roots[np.isreal(p.roots)][ip]>0:
+                ph[iz]=p.roots[np.isreal(p.roots)][ip]
+                break
+    co2=np.zeros(nz,dtype=np.float64)
+    hco3=np.zeros(nz,dtype=np.float64)
+    co3=np.zeros(nz,dtype=np.float64)
+    co2[:] = dic[:]/(1e0+k1/ph[:]+k1*k2/ph[:]/ph[:])
+    hco3[:] = dic[:]/(ph[:]/k1+1e0+k2/ph[:])
+    co3[:] = dic[:]/(ph[:]*ph[:]/k1/k2+ph[:]/k2+1e0)
+    da_dalk=np.zeros(nz,dtype=np.float64)
+    db_dalk=np.zeros(nz,dtype=np.float64)
+    dc_dalk=np.zeros(nz,dtype=np.float64)
+    dd_dalk=np.zeros(nz,dtype=np.float64)
+    de_dalk=np.zeros(nz,dtype=np.float64)
+    da_ddic=np.zeros(nz,dtype=np.float64)
+    db_ddic=np.zeros(nz,dtype=np.float64)
+    dc_ddic=np.zeros(nz,dtype=np.float64)
+    dd_ddic=np.zeros(nz,dtype=np.float64)
+    de_ddic=np.zeros(nz,dtype=np.float64)
+    da_dalk[:]=0e0
+    db_dalk[:]=1e0
+    dc_dalk[:]=k1
+    dd_dalk[:]=k1*k2
+    de_dalk[:]=0e0
+    da_ddic[:]=0e0
+    db_ddic[:]=0e0
+    dc_ddic[:]=-k1
+    dd_ddic[:]=-2e0*k1*k2
+    de_ddic[:]=0e0
+    dph_dalk=np.zeros(nz,dtype=np.float64)
+    dph_ddic=np.zeros(nz,dtype=np.float64)
+    dco3_dalk=np.zeros(nz,dtype=np.float64)
+    dco3_ddic=np.zeros(nz,dtype=np.float64)
+    dph_dalk[:] = -(da_dalk[:]*ph[:]**4e0+db_dalk[:]*ph[:]**3e0+dc_dalk[:]*ph[:]**2e0+dd_dalk[:]*ph[:]+de_dalk[:])  \
+        /(a[:]*4e0*ph[:]**3e0+b[:]*3e0*ph[:]**2e0+c[:]*2e0*ph[:]+d[:])
+    dph_ddic[:] = -(da_ddic[:]*ph[:]**4e0+db_ddic[:]*ph[:]**3e0+dc_ddic[:]*ph[:]**2e0+dd_ddic[:]*ph[:]+de_ddic[:])  \
+        /(a[:]*4e0*ph[:]**3e0+b[:]*3e0*ph[:]**2e0+c[:]*2e0*ph[:]+d[:])        
+    dco3_dalk[:] = 0e0/(ph[:]*ph[:]/k1/k2+ph[:]/k2+1e0) \
+        + dic[:]*(-1e0)/((ph[:]*ph[:]/k1/k2+ph[:]/k2+1e0)**2e0)*(2e0*ph[:]/k1/k2+1e0/k2)*dph_dalk[:] 
+    dco3_ddic[:] = 1e0/(ph[:]*ph[:]/k1/k2+ph[:]/k2+1e0) \
+        + dic[:]*(-1e0)/((ph[:]*ph[:]/k1/k2+ph[:]/k2+1e0)**2e0)*(2e0*ph[:]/k1/k2+1e0/k2)*dph_ddic[:] 
+    return co2,hco3,co3,ph,dco3_ddic,dco3_dalk,info
 
+def test_co2h2o():
+    nz = 100
+    dic=np.zeros(nz,dtype=np.float64)
+    alk=np.zeros(nz,dtype=np.float64)
+    dep = 4.
+    sal = 35. 
+    temp = 2.
+    dic[:] = 2285e0#*1e-6
+    alk[:] = 2211e0#*1e-6
+    co2,hco3,co3,ph,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dic,alk,nz)
+    print co2
+    print ''
+    print hco3
+    print ''
+    print co3
+    print ''
+    print ph
+    print ''
+    print dco3_ddic
+    print ''
+    print dco3_dalk
+    print '' 
+    
 def calcdevs(tmp,sal,dep,dic,alk,nz):
     info = 0
     k1=np.float64(calceq1(tmp,sal,dep))
@@ -373,7 +496,9 @@ def omcalc(
                 if trans[iiz,iz,0]==0e0: continue
                 amx[row,col] += -trans[iiz,iz,0]/dz[iz]
     ymx = - ymx 
-    kai = np.linalg.solve(amx, ymx)
+    # kai = np.linalg.solve(amx, ymx)
+    # kai = la.solve(amx, ymx)
+    lu, piv, kai, info = lapack.dgesv(amx, ymx)
     ymx[:]=kai[:].copy()
     omx[:] = ymx[:].copy() # now passing the solution to unknowns omx 
     return omx,izox,kom
@@ -508,7 +633,10 @@ def o2calc_ox(
                 - 0.5e0*(poro[iz]*dif_o2[iz]+poro[iz-1]*dif_o2[iz-1])*(-1e0)/(0.5e0*(dz[iz]+dz[iz-1])))/dz[iz] 
                 )
     ymx = - ymx  # sign change; see above for the case of om 
-    ymx = np.linalg.solve(amx, ymx)
+    # ymx = np.linalg.solve(amx, ymx)
+    # kai = la.solve(amx, ymx)
+    lu, piv, kai, info = lapack.dgesv(amx, ymx)
+    ymx[:]=kai[:].copy()
     o2x[:] = ymx[:].copy() # passing solutions to unknowns 
     return o2x
 
@@ -607,7 +735,9 @@ def o2calc_sbox(
                 + 1e0 
                 )
     ymx = - ymx  # change signs 
-    kai = np.linalg.solve(amx, ymx) # solving
+    # kai = np.linalg.solve(amx, ymx) # solving
+    # kai = la.solve(amx, ymx) # solving
+    lu, piv, kai, info = lapack.dgesv(amx, ymx)
     ymx[:]=kai[:].copy()
     o2x[:] = ymx[:].copy() # passing solution to variable 
     return o2x 
@@ -639,7 +769,7 @@ def calccaco3sys(  #
     ccx,dicx,alkx,rcc,dt  # in&output
     ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic # input
     ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz,tol,sparse,fact  # input
-    ,dici,alki,ccx_th,showiter,w_pre
+    ,dici,alki,ccx_th,showiter,w_pre,co2chem
     ):
     drcc_dco3=np.zeros((nz,nspcc),dtype=np.float64)
     drcc_dcc=np.zeros((nz,nspcc),dtype=np.float64)
@@ -659,39 +789,38 @@ def calccaco3sys(  #
         amx[:,:]=0e0
         ymx=np.zeros(nmx,dtype=np.float64)
         # calling subroutine from caco3_therm.f90 to calculate aqueous co2 species 
-        co2x,hco3x,co3x,prox,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
-        # print info
-        # calcspecies(temp,sal,dep,dicx,alkx)
-        if info==1: # which means error in calculation 
-            dt=dt/10e0
-            dicx[:]=dic[:].copy()
-            alkx[:]=alk[:].copy()
-            ccx[:,:]=cc[:,:].copy()
-            w[:]=w_pre[:].copy()
-            # upwind(w)
-            up,dwn,cnr,adf = calcupwindscheme(w,nz)
-            print 'location 1'
-            flg_restart = True 
-            continue
-            print 'stop'
-            input()
-        # calling subroutine from caco3_therm.f90 to calculate derivatives of co3 wrt alk and dic 
-        dco3_ddic,dco3_dalk,info = calcdevs(temp,sal,dep,dicx,alkx,nz)
-        # print info
-        # calcdevs(temp,sal,dep,dicx,alkx)
-        if info==1: # which means error in calculation 
-            dt=dt/10e0
-            dicx[:]=dic[:].copy()
-            alkx[:]=alk[:].copy()
-            ccx[:,:]=cc[:,:].copy()
-            w[:]=w_pre[:].copy()
-            # upwind(w)
-            up,dwn,cnr,adf = calcupwindscheme(w,nz)
-            print 'location 2'
-            flg_restart = True 
-            continue
-            print 'stop'
-            input()
+        if co2chem == 'co2':
+            co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
+            # print info
+            # calcspecies(temp,sal,dep,dicx,alkx)
+            if info==1: # which means error in calculation 
+                dt=dt/10e0
+                dicx[:]=dic[:].copy()
+                alkx[:]=alk[:].copy()
+                ccx[:,:]=cc[:,:].copy()
+                w[:]=w_pre[:].copy()
+                # upwind(w)
+                up,dwn,cnr,adf = calcupwindscheme(w,nz)
+                print 'location 1'
+                flg_restart = True 
+                continue
+                print 'stop'
+                input()
+        elif co2chem=='co2h2o':
+            co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dicx,alkx,nz)
+            if info==1: # which means error in calculation 
+                dt=dt/10e0
+                dicx[:]=dic[:].copy()
+                alkx[:]=alk[:].copy()
+                ccx[:,:]=cc[:,:].copy()
+                w[:]=w_pre[:].copy()
+                # upwind(w)
+                up,dwn,cnr,adf = calcupwindscheme(w,nz)
+                print 'location 2'
+                flg_restart = True 
+                continue
+                print 'stop'
+                input()
         for isp in range(nspcc):
             # calculation of dissolution rate for individual species 
             rcc[:,isp] = kcc[:,isp]*ccx[:,isp]*abs(1e0-co3x[:]*1e3/co3sat)**ncc*((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)
@@ -973,7 +1102,9 @@ def calccaco3sys(  #
             amx=amx.tocsr()
             kai=spsolve(amx,ymx)
         else:
-            kai = np.linalg.solve(amx, ymx)
+            # kai = np.linalg.solve(amx, ymx)
+            # kai = la.solve(amx, ymx) # solving
+            lu, piv, kai, info = lapack.dgesv(amx, ymx)
         # if itr ==1:time.sleep(5)
         ymx[:] = kai[:].copy()  
         if any(np.isnan(ymx)):
@@ -1034,6 +1165,18 @@ def calccaco3sys(  #
             if alkx[iz]<1e-100: ymx[row+nspcc+1] = 0e0
         error = np.max(np.exp(np.abs(ymx[:]))) - 1e0
         itr = itr + 1
+        if itr > 5000:
+            dt=dt/10e0
+            dicx[:]=dic[:].copy()
+            alkx[:]=alk[:].copy()
+            ccx[:,:]=cc[:,:].copy()
+            w[:]=w_pre[:].copy()
+            # upwind(w)
+            up,dwn,cnr,adf = calcupwindscheme(w,nz)
+            print '... unable to converge'
+            flg_restart = True 
+            continue
+            print 'stop'
         if showiter:
             print 'co2 iteration',itr,error
             print  'cc :',np.sum(ccx[0:nz:nz/5,:],axis=1)*mcc/rho[0:nz:nz/5]*100e0
@@ -1070,7 +1213,7 @@ def calccaco3sys(  #
 def calcflxcaco3sys(  
     dw # inoutput
      ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    # input
-     ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo,ccflx,dici,alki,mvcc,tol        # input
+     ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo,ccflx,dici,alki,mvcc,tol,workdir        # input
      ):
     nsp = 2 + nspcc  # now considered species are dic, alk and nspcc of caco3   
     cctflx =np.zeros((nspcc),dtype=np.float64)
@@ -1179,6 +1322,7 @@ def calcflxcaco3sys(
     if abs(alkres)/np.max([abs(alktflx),abs(alkdis) ,abs(alkdif) , abs(alkdec)]) > tol*10e0:   
     # if residula fluxes are relatively large, record just in case  
         print 'not enough accuracy in co2 calc:stop',abs(alkres)/np.max([abs(alktflx),abs(alkdis) ,abs(alkdif) , abs(alkdec)])
+        file_err=open(workdir+'errlog.txt','a')
         print >> file_err, 'not enough accuracy in co2 calc:stop',abs(alkres)/np.max([abs(alktflx),abs(alkdis) ,abs(alkdif) , abs(alkdec)])
     return cctflx,ccflx,ccdis,ccdif,ccadv,ccrain,ccres,alktflx,alkdis,alkdif,alkdec,alkres \
         ,dictflx,dicdis,dicdif,dicres,dicdec  \
@@ -1259,7 +1403,9 @@ def claycalc(
             print>> file_tmp,ymx[iz]
         file_tmp.close()
         input()
-    kai = np.linalg.solve(amx, ymx)
+    # kai = np.linalg.solve(amx, ymx)
+    # kai = la.solve(amx, ymx) # solving
+    lu, piv, kai, info = lapack.dgesv(amx, ymx)
     ymx[:] = kai[:].copy()
     if np.isnan(amx).any():
         print 'NAN in amx:pt'
@@ -1441,7 +1587,8 @@ def recordprofile(itrec
         file_tmp.close()
         file_tmp=open(workdir+'ccx_sp-'+'{:03}'.format(0)+'.txt','w')
         for iz in range(nz):
-            print >> file_tmp,z[iz],age[iz],ccx[iz,:]*mcc/2.5*100.
+            # print >> file_tmp,z[iz],age[iz],ccx[iz,:]*mcc/2.5*100.
+            print >> file_tmp,z[iz],age[iz],str(ccx[iz,:]*mcc/2.5*100.)[1:-1]
         file_tmp.close()
         file_tmp=open(workdir+'sig-'+'{:03}'.format(0)+'.txt','w')
         for iz in range(nz):
@@ -1471,7 +1618,8 @@ def recordprofile(itrec
         file_tmp.close()
         file_tmp = open(workdir+'ccx_sp-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
-            print>>file_tmp,z[iz],age[iz],ccx[iz,0:nspcc]*mcc/rho[iz]*100e0
+            # print>>file_tmp,z[iz],age[iz],ccx[iz,0:nspcc]*mcc/rho[iz]*100e0
+            print>>file_tmp,z[iz],age[iz], str(ccx[iz,0:nspcc]*mcc/rho[iz]*100.)[1:-1]
         file_tmp.close()
         file_tmp = open(workdir+'sig-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
@@ -1703,12 +1851,15 @@ def main():
     showiter = False                # show each iteration 
     sparse = True                   # use sparse matrix solver for co2 system
     # switches for mixing 
-    allturbo2 = True               # all turbo2-like mixing
+    allturbo2 = True                # all turbo2-like mixing
     alllabs = False                 # all labs mixing
-    allnobio = False                 # no bioturbation for all solid species 
+    allnobio = False                # no bioturbation for all solid species 
+    # switches for co2 chemistry 
+    co2chem = 'co2'                 # dic = co2+hco3+co3; alk = hco3+2*co3
+    # co2chem = 'co2h2o'              # dic = co2+hco3+co3; alk = hco3+2*co3+oh-h
     # working directory 
     workdir = 'C:/Users/YK/Desktop/Sed_res'
-    filename = 'nb-50kyr-6km' 
+    filename = '-test-50kyr-5km' 
     # ===========  checking something 
     # chk_caco3_therm()
     # chk_caco3_therm_sbrtns()
@@ -1858,7 +2009,8 @@ def main():
     cc[:,:] = 1e-8
     dic[:]=dici*1e-6/1e3
     alk[:]=alki*1e-6/1e3
-    co2,hco3,co3,pro,info = calcspecies(temp,sal,dep,dic,alk,nz)
+    if co2chem=='co2': co2,hco3,co3,pro,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dic,alk,nz)
+    if co2chem=='co2h2o':co2,hco3,co3,pro,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dic,alk,nz)
     pt=np.zeros(nz,dtype=np.float64)
     om=np.zeros(nz,dtype=np.float64)
     o2=np.zeros(nz,dtype=np.float64)
@@ -1959,8 +2111,8 @@ def main():
         while True:
             print 'it :',it,dt
             dw = np.zeros(nz,dtype=np.float64)
-            oxco2[:]=0.
-            anco2[:]=0.
+##            oxco2[:]=0.
+##            anco2[:]=0.
             itr =0
             error = 1e4
             minerr = 1e4
@@ -2052,7 +2204,7 @@ def main():
                 ccx,dicx,alkx,rcc,dt  # in&output
                 ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic # input
                 ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz,tol,sparse,fact 
-                ,dici,alki,ccx_th,showiter,w_pre  # input
+                ,dici,alki,ccx_th,showiter,w_pre,co2chem  # input
                 )
             # ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
             # update aqueous co2 species 
@@ -2060,7 +2212,8 @@ def main():
             # if flg_restart: break # exit loop for w iteration  
             if flg_restart: continue # exit loop for w iteration  
             # calcspecies(temp,sal,dep,dicx,alkx)
-            co2x,hco3x,co3x,prox,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
+            if co2chem=='co2':co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
+            elif co2chem=='co2h2o':co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dicx,alkx,nz)
             if info==1:  
                 dt=dt/10e0
                 print 'stop'
@@ -2072,7 +2225,7 @@ def main():
                 calcflxcaco3sys(  
                     dw # inoutput
                      ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    # input
-                     ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo,ccflx,dici,alki,mvcc,tol        # input
+                     ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo,ccflx,dici,alki,mvcc,tol,workdir        # input
                      )
             # ~~~~ calculation clay  ~~~~~~~~~~~~~~~~~~
             ptx = claycalc( 
@@ -2182,6 +2335,7 @@ def main():
         print  'cc :',np.sum(ccx[0:nz:nz/5,:],axis=1)*mcc/rho[0:nz:nz/5]*100e0
         print  'dic:',dicx[0:nz:nz/5]#*1e3
         print  'alk:',alkx[0:nz:nz/5]#*1e3
+        print  'ph :',-np.log10(prox[0:nz:nz/5])
         print  'sed:',ptx[0:nz:nz/5]*msed/rho[0:nz:nz/5]*100e0
         print  '   ..... multiple cc species ..... '
         for isp in range(nspcc ):
