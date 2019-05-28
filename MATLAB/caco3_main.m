@@ -19,8 +19,6 @@ classdef caco3_main
     % ===================================
     properties (Constant)
         
-        nspcc = 4;  % default: 4; if def_sense: 12;  if def_track2: 42; if def_size: 8    % number of CaCO3 species
-        ztot=500d0; % if def_sense: 50.0d0;   % cm , total sediment thickness
         nz = 100;       % grid number
         tol = 1d-8; % 1d-6    % tolerance of error
         nrec = 15;      % total recording time of sediment profiles
@@ -37,8 +35,6 @@ classdef caco3_main
         msed = 258.16d0;  % g/mol arbitrary sediment g/mol assuming kaolinite ( 	Al2Si2O5(OH)4 )
         mcc = 100d0;  % g/mol CaCO3
         ox2om = 1.3d0;  % o2/om ratio for om decomposition (Emerson 1985; Archer 1991)
-        % om2cc = 0.666d0;   % rain ratio of organic matter to calcite
-        om2cc = 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
         % :: om2cc = 0.5d0  % rain ratio of organic matter to calcite
         ncc = 4.5d0;   % (Archer et al. 1989) reaction order for caco3 dissolution
         
@@ -60,10 +56,10 @@ classdef caco3_main
         def_biotest = false;   	% testing 5kyr signal change event
         def_size = false;       % testting two size caco3 simulation
         
-        def_sense = false;       % without signal tracking
+        def_sense = true;       % without signal tracking
         def_track2 = false;   	% using method2 to track signals (default 42 species)
         def_nondisp = true;       % won't showing results on display
-        def_nonrec = false;       % define not recording profiles?
+        def_nonrec = true;       % define not recording profiles?
         def_showiter = false;      % show co2 iterations & error in calccaco3sys
         def_sparse = false;       % using sparse matrix solve (you need UMFPACK)
         
@@ -71,9 +67,7 @@ classdef caco3_main
         def_allturbo2 = false;      % all turbo2 mixing
         def_alllabs = false;        % all labs mixing
         def_allnonlocal = false; 	% ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
-        
-        def_oxonly = false;      % enabling only oxic degradation of om
-        
+                
         def_nodissolve = false;     % assuming no caco3 dissolution
         
         def_fullclump = false;      % allowing full 2 substitution including 17o
@@ -92,6 +86,13 @@ classdef caco3_main
         
         
         %%
+        nspcc = 4;  % default: 4; if def_sense: 12;  if def_track2: 42; if def_size: 8    % number of CaCO3 species
+        ztot=500d0; % if def_sense: 50.0d0;   % cm , total sediment thickness
+        om2cc = 0.666d0;   % rain ratio of organic matter to calcite
+        % om2cc = 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
+
+        def_oxonly = false;      % enabling only oxic degradation of om
+
         z; dz;   % depth, individual sediment layer thickness
         
         poroi = 0.8d0   % a reference porosity
@@ -344,7 +345,8 @@ classdef caco3_main
             %~~~~~~~~~~~~ loading transition matrix from LABS ~~~~~~~~~~~~~~~~~~~~~~~~
             if (any(labs))
                 %                translabs = 0d0
-                nlabs = 7394;  % number of labs transition matrices to be read
+%                nlabs = 7394;  % number of labs transition matrices to be read
+                nlabs = 1;  % number of labs transition matrices to be read
                 %    print*, 'loading LABS ' , labs
                 for ilabs=1:nlabs
                     % %  Dominik: todo: Run and test with input
@@ -356,6 +358,7 @@ classdef caco3_main
                     % %                        read(file_tmp,*) translabs_tmp(iz,:)  % reading
                     % %                    end
                     % %                    close(file_tmp)
+                    translabs_tmp=load('./labs-mtx.txt');
                     translabs = translabs + translabs_tmp;  % adding up all transition matrices
                 end
                 translabs = translabs/real(nlabs); % and averaging all transition matrices
@@ -425,7 +428,7 @@ classdef caco3_main
                 
                 %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                 % transition matrix for random mixing
-                transturbo2 = transturbo2 + 0.0015d0/1d0;  % arbitrary assumed probability
+                transturbo2(1:izml,1:izml) = 0.0015d0/1d0;  % arbitrary assumed probability
                 for iz=1:izml  % when i = j, transition matrix contains probabilities with which particles are moved from other layers of sediment
                     transturbo2(iz,iz)=-0.0015d0*(izml-1)/1d0;
                 end
@@ -496,7 +499,7 @@ classdef caco3_main
                             izox = iz;      % set grid number down
                         end
                     else% unless anoxi degradation is allowed, om cannot degradate below zox
-                        kom(iz) = 0d0
+                        kom(iz) = 0d0;
                         if (anoxic)
                             kom(iz) = komi;
                         end
@@ -812,6 +815,7 @@ classdef caco3_main
             
             %                         call dgesv(nmx,int(1),amx,nmx,ipiv,ymx,nmx,infobls) % solving
             %                         o2x = ymx % passing solution to variable
+            % o2x = matrixDivide(amx,ymx);
             o2x = linsolve(amx,ymx);
             
         end
@@ -916,7 +920,7 @@ classdef caco3_main
             
             
             flg_500 = false;
-            error = 1d4;
+            co2_error = 1d4;
             itr = 0;
             
             nsp = 2 + nspcc;  % now considered species are dic, alk and nspcc of caco3
@@ -931,7 +935,7 @@ classdef caco3_main
             
             
             %%% TODO: translate from here
-            while(error > tol)
+            while(co2_error > tol)
                 amx = zeros(nmx, nmx);          % amx corresponds to A in Ax = B, but ymx is also x when Ax = B is solved. emx is array of error
                 ymx = zeros(1, nmx);            % ymx correspond to B in Ax = B, but ymx is also x when Ax = B is solved
                 
@@ -940,7 +944,7 @@ classdef caco3_main
                 [prox,co2x,hco3x,co3x,infosbr] = caco3_therm.calcspecies(dicx,alkx,tmp,sal,dep);
                 %                co3x = co3x';
                 if (infosbr==1) % which means error in calculation
-                    dt=dt/10d0;
+%                    dt=dt/10d0;    % DH: change outside subroutine
                     if(def_sense)
                         % go to 500
                         flg_500= true;
@@ -955,7 +959,7 @@ classdef caco3_main
                 % call calcdevs(dicx,alkx,temp,sal,dep,nz,infosbr,dco3_dalk,dco3_ddic)
                 [dco3_dalk,dco3_ddic, infosbr] = caco3_therm.calcdevs(dicx,alkx,tmp,sal,dep);
                 if (infosbr==1) % which means error in calculation
-                    dt=dt/10d0;
+%                    dt=dt/10d0;    % DH: change outside subroutine
                     if(def_sense)
                         % go to 500
                         flg_500= true;
@@ -1292,7 +1296,7 @@ classdef caco3_main
                     %                         fprintf('%17.16e \n', ymx(iz));
                     %                     end
                     %                 fprintf('end amx(1,1) %17.16e \n', amx(1,1));
-                    %                 str = sprintf('chk_amx.txt');
+                    %                 str = sprintf('matlab_chk_amx.txt');
                     %                 file_tmp = fopen(str,'wt');
                     %
                     %                 for iz=1:nmx
@@ -1359,10 +1363,10 @@ classdef caco3_main
                 %              	fprintf('ccx after \n');
                 %                  ccx
                 
-                error = max(exp(abs(ymx))) - 1d0;
+                co2_error = max(exp(abs(ymx))) - 1d0;
                 itr = itr + 1;
                 if(def_showiter)
-                    fprintf('co2 iteration, error %i \t %17.16e \n',itr, error);
+                    fprintf('co2 iteration, error %i \t %17.16e \n',itr, co2_error);
                 end
                 
                 
@@ -1821,7 +1825,7 @@ classdef caco3_main
             
             if (itrec==0)
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/ptx-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_ptx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1830,7 +1834,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/ccx-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_ccx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1838,57 +1842,57 @@ classdef caco3_main
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
                         z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat, sum(rcc(iz,:)),-log10(pro(iz) ));
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/o2x-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_o2x-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz));
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/omx-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_omx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),om(iz)*mom/2.5d0*100d0);
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./resprofiles/ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_ccx_sp-%3.3i.txt',itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
                     fprintf(file_tmp,fmt,z(iz), age(iz),cc(iz,:)*mcc/2.5d0*100d0);
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./resprofiles/sig-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_sig-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),d13c_ocni,d18o_ocni);
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./resprofiles/bur-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_bur-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz));
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
             else
                 
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/ptx-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_ptx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1897,7 +1901,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/ccx-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_ccx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1905,53 +1909,53 @@ classdef caco3_main
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ',...
                         z(iz),age(iz),sum(ccx(iz,:))*mcc/rho(iz)*100d0, dicx(iz)*1d3, alkx(iz)*1d3, co3x(iz)*1d3-co3sat, sum(rcc(iz,:)),-log10(prox(iz)) );
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/o2x-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_o2x-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz));
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./resprofiles/omx-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_omx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),omx(iz)*mom/rho(iz)*100d0);
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./resprofiles/ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_ccx_sp-%3.3i.txt',itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),(cc(iz,isp)*mcc/2.5d0*100d0,isp=1,nspcc)
                     fprintf(file_tmp,fmt,z(iz), age(iz),ccx(iz,:)*mcc/rho(iz)*100d0);
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./resprofiles/sig-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_sig-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),d13c_blk(iz),d18o_blk(iz));
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./resprofiles/bur-%3.3i.txt',itrec);
+                str = sprintf('./2305_lysocline/matlab_bur-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
                     fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz));
                 end
-                fclose(file_tmp)
+                fclose(file_tmp);
                 
             end
             
@@ -1993,7 +1997,7 @@ classdef caco3_main
             cntrec = 1;  % rec number (increasing with recording done )
             if(~def_nonrec)
                 % open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
-                str = sprintf('./resprofiles/rectime.txt');
+                str = sprintf('./2305_lysocline/matlab_rectime.txt');
                 file_tmp = fopen(str,'wt');
                 for itrec=1:nrec
                     %write(file_tmp,*) rectime(itrec)  % recording when records are made
@@ -2008,7 +2012,7 @@ classdef caco3_main
         function [d13c_sp,d18o_sp] = sig2sp_pre(d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf, def_sense, def_size, nspcc)
             %% end-member signal assignment
             
-            if(~def_sense) % without signal tracking
+            if(~def_sense) % with signal tracking
                 %  four end-member caco3 species interpolation
                 d13c_sp(1)=d13c_ocni;
                 d18o_sp(1)=d18o_ocni;

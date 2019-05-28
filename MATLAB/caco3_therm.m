@@ -25,7 +25,8 @@ classdef caco3_therm
             calceq1_val=10.0d0^(-calceq1_val);
             
             % see Zeebe and Wolf-Gladrow (2001) Appendix A.11)
-            calceq1_val=calceq1_val*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k);
+           calceq1_val=calceq1_val*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k);
+% correct:            calceq1_val=calceq1_val*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d-3+0.0877d-3*tmp)*pres*pres)/83.131d0/tmp_k);
             
         end %function calceq1
         
@@ -49,6 +50,7 @@ classdef caco3_therm
             
            % see Zeebe and Wolf-Gladrow (2001) Appendix A.11)
            calceq2_val=calceq2_val*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d-3+0.0877d-3*tmp)*pres*pres)/83.131d0/tmp_k);
+% correct:            calceq2_val=calceq2_val*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k);
             
             
         end %function calceq2
@@ -93,6 +95,10 @@ classdef caco3_therm
             % subroutine to calculate all aqueous co2 species and pH
             
             info=0;
+            co2 = zeros(1, length(alk));
+            hco3 = zeros(1, length(alk));
+            co3 = zeros(1, length(alk));
+            
             k1=caco3_therm.calceq1(tmp,sal,dep);
             k2=caco3_therm.calceq2(tmp,sal,dep);
             a=1.0d0;
@@ -100,7 +106,7 @@ classdef caco3_therm
             c=(1.0d0-2.0d0*dic./alk)*k1*k2;
             ph = (-b+sqrt(b.*b-4.0d0.*a.*c))./2.0d0./a;
             if (any(ph<0d0))
-                fprintf('... unable to calculate ph');
+                fprintf('... unable to calculate ph - calcspecies \n');
                 % print*,dic
                 % print*,alk
                 % print*,ph
@@ -131,7 +137,7 @@ classdef caco3_therm
             c=(1.0d0-2.0d0*dic./alk)*k1*k2;
             ph = (-b+sqrt(b.*b-4.0d0.*a.*c))./2.0d0./a;
             if (any(ph<0d0))
-                fprintf('... unable to calculate ph');
+                fprintf('... unable to calculate ph - calcdevs \n');
                 % print*,dic
                 % print*,alk
                 % print*,ph

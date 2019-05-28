@@ -21,7 +21,10 @@ integer(kind=4) interval  ! choose value between 1 to nz
 interval =10 ! choose a value between 1 to nz; om depth profile is shown with this interval; e.g., if inteval = nz, om conc. at all depths are shown
 ! e.g., if interval = 5, om conc. at 5 depths are shown   
 
-workdir = './' ! working directory
+workdir = './2105_recprofile_signaltrack_fickian/' ! working directory
+call system ('mkdir -p '//trim(adjustl(workdir)))
+workdir = trim(adjustl(workdir))//'/'
+
 
 #ifdef allnobio 
 nobio = .true.
