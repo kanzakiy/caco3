@@ -2,13 +2,13 @@
 #define test 
 
 ! testing 5kyr signal change event 
-#define biotest
+! #define biotest
 
 ! testting two size caco3 simulation 
 !#define size 
 
 ! without signal tracking 
-! #define sense
+#define sense
 
 ! using method2 to track signals (default 42 species)
 ! #define track2 
@@ -20,7 +20,7 @@
 !#define nonrec
 
 ! shwoing every iteration 
-! #define showiter
+#define showiter
 
 ! using sparse matrix solve (you need UMFPACK) 
 ! #define sparse
@@ -29,7 +29,7 @@
 ! #define allturbo2 
 
 ! all labs mixing 
-#define alllabs 
+! #define alllabs 
 
 ! no bioturbation 
 ! #define allnobio 
@@ -44,7 +44,10 @@
 ! #define nodissolve
 
 ! direct isotope tracking 
-! #define isotopologues
+! #define isotrack
+
+! direct isotope tracking with including 17O 
+! #define fullclump
 
 ! using mocsy for caco3 thermodynamics 
 ! #define mocsy
