@@ -8,22 +8,28 @@
 !#define size 
 
 ! without signal tracking 
-#define sense
+! #define sense
 
 ! using method2 to track signals (default 42 species)
-! #define track2 
+#define track2 
+
+! specify the number of caco3 species (if not, nspccinput=4)
+#define nspccinput 22
+
+! specify the grid number (if not, nzinput=100)
+! #define nzinput 100
 
 ! not showing results on display 
 ! #define nondisp
 
 ! not recording profiles 
-!#define nonrec
+! #define nonrec
 
 ! shwoing every iteration 
-#define showiter
+! #define showiter
 
 ! using sparse matrix solve (you need UMFPACK) 
-! #define sparse
+#define sparse
 
 ! all turbo2 mixing 
 ! #define allturbo2 

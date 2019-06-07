@@ -22,18 +22,29 @@ subroutine caco3()
 implicit none 
 
 #include <defines.h>
-integer(kind=4),parameter :: nz = 100  ! grid number 
+integer(kind=4)nz      ! grid number
+integer(kind=4)nspcc   ! number of CaCO3 species 
+
+#ifndef nzinput
+#define nzinput 100
+#endif 
+
+#ifndef nspccinput
 #ifdef sense
-integer(kind=4),parameter :: nspcc = 1  ! number of CaCO3 species 
+#define nspccinput 1
 #elif defined track2
-integer(kind=4),parameter :: nspcc = 42
+#define nspccinput 42
 #elif defined size
-integer(kind=4),parameter :: nspcc = 8
+#define nspccinput 8
 #elif defined isotrack
-integer(kind=4),parameter :: nspcc = 5
+#define nspccinput 5
 #else
-integer(kind=4),parameter :: nspcc = 4
+#define nspccinput 4
 #endif
+#endif 
+
+parameter(nz=nzinput)  
+parameter(nspcc=nspccinput)
 integer(kind=4),parameter :: nsig = 2
 integer(kind=4) nt_spn,nt_trs,nt_aft
 real(kind=8) cc(nz,nspcc),ccx(nz,nspcc)  ! mol cm-3 sld; concentration of caco3, subscript x denotes dummy variable used during iteration 
@@ -83,9 +94,9 @@ real(kind=8) :: dici = 2154d0 ! uM   ! a reference DIC from mocsy
 #endif 
 real(kind=8) :: o2i = 165d0 ! uM     ! a reference O2 ; MUDS
 ! real(kind=8) :: komi = 2d0  ! /yr  ! a reference om degradation rate const.; MUDS 
-real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary 
+! real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary 
 ! real(kind=8) :: komi = 0.1d0  ! /yr  ! Canfield 1994
-! real(kind=8) :: komi = 0.06d0  ! /yr  ! ?? Emerson 1985? who adopted relatively slow decomposition rate 
+real(kind=8) :: komi = 0.06d0  ! /yr  ! ?? Emerson 1985? who adopted relatively slow decomposition rate 
 ! real(kind=8) :: kcci = 10.0d0*365.25d0  ! /yr; a reference caco3 dissolution rate const. 
 #ifndef nodissolve
 real(kind=8) :: kcci = 1d0*365.25d0  ! /yr  ;cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
@@ -160,7 +171,7 @@ real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:) ! amx and ymx correspond to A
 integer(kind=4),allocatable :: ipiv(:),dumx(:,:) ! matrix used to solve linear system Ax = B 
 integer(kind=4) infobls, infosbr  ! variables used to tell errors when calling a subroutine to solve matrix 
 real(kind=8) error, error2, minerr  !  errors in iterations and minimum error produced 
-real(kind=8) :: tol = 1d-6  ! tolerance of error 
+real(kind=8) :: tol = 1d-12  ! tolerance of error 
 integer(kind=4) iz, row, col, itr  , it, iiz, itr_w, itr_f ! integers for sediment grid, matrix row and col and iteration numbers 
 integer(kind=4) cntsp  ! counting caco3 species numbers 
 integer(kind=4) izrec, izrec2  ! grid number where signal is read 
@@ -201,8 +212,12 @@ logical :: nobio(nspcc+2) = .false.  ! no biogenic reworking assumed
 logical :: turbo2(nspcc+2) = .false.  ! random mixing 
 logical :: labs(nspcc+2) = .false.  ! mixing info from LABS 
 logical :: nonlocal(nspcc+2)  ! ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
-logical :: flg_500
-real(kind=8) dt_om_o2 
+logical :: flg_500,izox_calc_done
+real(kind=8) dt_om_o2,error_o2min ,dti
+integer(kind=4) iizox, iizox_errmin, w_save(nz)
+integer(kind=4) :: itr_w_max = 20
+real(kind=8) :: kom_ox(nz),kom_an(nz),kom_dum(nz,3)
+logical :: warmup_done = .false.
 
 #ifdef allnobio 
 nobio = .true.
@@ -220,10 +235,9 @@ call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)  ! get date and time in
 
 !!! get variables !!!
 ! get total caco3 flux, om/caco3 rain ratio and water depth   
-call getinput(ccflxi,om2cc,dt,filechr,dep)
+call getinput(ccflxi,om2cc,dti,filechr,dep,anoxic,nobio,labs,turbo2,nspcc)
 print'(3A,3E11.3)','ccflxi','om2cc','dep:',ccflxi,om2cc, dep  ! printing read data 
 
-#ifndef nonrec
 ! prepare directory to store result files 
 call makeprofdir(  &  ! make profile files and a directory to store them 
     workdir   &
@@ -232,7 +246,6 @@ call makeprofdir(  &  ! make profile files and a directory to store them
     ,file_bound,file_totfrac,file_sigmly,file_sigmlyd,file_sigbtm,file_ccflxes  &
     ,ccflxi,dep,om2cc,chr &
     )
-#endif
 !!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -296,7 +309,7 @@ call recordtime(  &
     )
 
 ! depi = 4d0  ! depth before event 
-depi = 3.8d0  ! depth before event 
+depi = 3.5d0  ! depth before event 
 depf = dep   ! max depth to be changed to  
 
 flxfini = 0.5d0  !  total caco3 rain flux for fine species assumed before event 
@@ -388,7 +401,7 @@ call recordprofile(  &
 #endif
 !~~~~~~~~~~~~~~~~~~~~~~~~
 !! START OF TIME INTEGLATION !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+warmup_done = .false.
 time = 0d0
 it = 1
 do 
@@ -396,7 +409,18 @@ do
     !! ///////// isotopes & fluxes settings ////////////// 
 #ifndef sense    
     nt_spn = 800
-    ! nt_spn = 2400
+    if (.not.warmup_done) then 
+        if (it<11) then 
+            nt_spn = 80000
+        elseif (it<21) then
+            nt_spn = 8000
+        else 
+            warmup_done = .true.
+            time = 0d0
+            it = 1
+            cycle
+        endif 
+    endif 
     nt_trs = 5000
     nt_aft = 1000
     call timestep(time,nt_spn,nt_trs,nt_aft,dt,time_spn,time_trs,time_aft)
@@ -408,6 +432,9 @@ do
     call bdcnd(   &
         time,dep,time_spn,time_trs,time_aft,depi,depf  &
         ) 
+#else 
+    dt = dti
+    600 continue 
 #endif 
 
     ! isotope signals represented by caco3 rain fluxes 
@@ -457,6 +484,8 @@ do
 
     err_f = 0d0  !! relative different of total vol. fraction of solids wrt the previous value 
     err_fx = 0d0 !! previous err_f
+    
+    w_save = w !! saving previous w 
 
     ! point where iteration for w is conducted 
     300 continue 
@@ -477,15 +506,22 @@ do
     error = 1d4 ! error in ieration for om and o2 
     minerr= 1d4  ! recording minimum relative difference in zox from previously considered zox 
 
-    do while (error > tol)
+    do !  while (error > tol)
         !~~~~~~ OM calculation ~~~~~~~~~~~~~~~~~
         dt_om_o2 = 1d8 
         dt_om_o2 = dt 
+        
+        ! calculating zox from assumed/previous o2 profiles
+        call calc_zox( &
+            izox,kom,zox,kom_ox,kom_an   &  ! output 
+            ,oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  & ! input
+            )
+        
         call omcalc( &
-            omx,izox  & ! output 
-            ,kom   &  ! in&output
-            ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
-            ,w,wi,dt_om_o2,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz,o2th,komi &! input 
+            omx  & ! output 
+            ,kom   &  ! input
+            ,om,nz,sporo,sporoi,sporof &! input 
+            ,w,wi,dt_om_o2,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
             ) 
         ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
         call calcflxom(  &
@@ -496,89 +532,174 @@ do
             )
         !~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
-            call o2calc_ox(  &
-                o2x  & ! output
-                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
-                )
-            !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
-            call calcflxo2_ox( &
-                o2dec,o2dif,o2tflx,o2res  & ! output 
-                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,ox2om,o2i  & ! input
-                )
-        else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
+        ! if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
+        call o2calc_ox(  &
+            o2x  & ! output
+            ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+            )
+        !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+        call calcflxo2_ox( &
+            o2dec,o2dif,o2tflx,o2res  & ! output 
+            ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,ox2om,o2i  & ! input
+            )
+        ! endif 
+        ! else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
+            ! izox = nz
+            ! call o2calc_ox(  &
+                ! o2x  & ! output
+                ! ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                ! )
+            ! izox_calc_done = .false.
+            ! if (oxic) then 
+                ! do iz=1,nz
+                    ! if (o2x(iz) > o2th) then
+                        ! if (.not. izox_calc_done) izox = iz
+                    ! else! unless anoxi degradation is allowed, om cannot degradate below zox
+                        ! izox_calc_done = .true.
+                    ! endif
+                ! enddo
+            ! endif
+        ! print'(A,5E11.3)', 'o2 :',(o2x(iz)*1d3,iz=1,nz,nz/5)
+        ! if (all(o2x>=0d0)) then 
+        if (all(o2x>=0d0).and.izox==nz) then 
+            iizox_errmin = nz
+            ! print *,'all oxic',iizox_errmin 
+        elseif (any(o2x<0d0)) then 
+            error_o2min = 1d4
+            iizox_errmin = izox
+            do iizox = 1,nz   
+            ! do iizox = izox,nz   
+            ! do iizox = max(1,izox-20),min(nz,izox+20)   
+                call o2calc_sbox(  &
+                    o2x  & ! output
+                    ,iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                    )
+                ! fluxes relevant to oxygen 
+                ! call calcflxo2_sbox( &
+                    ! o2dec,o2dif,o2tflx,o2res  & ! output 
+                    ! ,nz,sporo,kom,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,iizox,ox2om,o2i  & ! input
+                    ! )
+                if (all(o2x>=0d0)) then 
+                    if (abs(o2x(max(iizox-1,1)))<error_o2min) then 
+                        error_o2min = abs(o2x(max(iizox-1,1)))
+                        iizox_errmin = iizox
+                        ! print*,'find smaller difference',iizox_errmin 
+                    endif 
+                endif 
+            enddo 
+            
             call o2calc_sbox(  &
                 o2x  & ! output
-                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                ,iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
                 )
             ! fluxes relevant to oxygen 
             call calcflxo2_sbox( &
                 o2dec,o2dif,o2tflx,o2res  & ! output 
-                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
+                ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,iizox_errmin,ox2om,o2i  & ! input
                 )
+                
+            ! izox_calc_done = .false.
+            ! if (oxic) then 
+                ! do iz=1,nz
+                    ! if (o2x(iz) > o2th) then
+                        ! if (.not. izox_calc_done) iizox_errmin = iz
+                    ! else! unless anoxi degradation is allowed, om cannot degradate below zox
+                        ! izox_calc_done = .true.
+                    ! endif
+                ! enddo
+            ! endif
+            
+            call calc_zox( &
+                iizox_errmin,kom_dum(:,1),zox,kom_dum(:,2),kom_dum(:,3)   &  ! output 
+                ,oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  & ! input
+                )
+            
         endif
 
         ! update of zox 
-        zoxx = 0d0
-        do iz=1,nz
-            if (o2x(iz)<=0d0) exit
-        enddo
+        ! zoxx = 0d0
+        ! do iz=1,nz
+            ! if (o2x(iz)<=0d0) exit
+        ! enddo
 
-        if (iz==nz+1) then ! oxygen never gets less than 0 
-            zoxx = ztot ! zox is the bottom depth 
-        else if (iz==1) then ! calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
-            zoxx = (z(iz)*o2i*1d-6/1d3 + 0d0*abs(o2x(iz)))/(o2i*1d-6/1d3+abs(o2x(iz)))
-        else     ! calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
-            zoxx = (z(iz)*o2x(iz-1) + z(iz-1)*abs(o2x(iz)))/(o2x(iz-1)+abs(o2x(iz)))
-        endif
+        ! if (iz==nz+1) then ! oxygen never gets less than 0 
+            ! zoxx = ztot ! zox is the bottom depth 
+        ! else if (iz==1) then ! calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
+            ! zoxx = (z(iz)*o2i*1d-6/1d3 + 0d0*abs(o2x(iz)))/(o2i*1d-6/1d3+abs(o2x(iz)))
+        ! else     ! calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
+            ! zoxx = (z(iz)*o2x(iz-1) + z(iz-1)*abs(o2x(iz)))/(o2x(iz-1)+abs(o2x(iz)))
+        ! endif
 
-        error = abs((zox -zoxx)/zox)  ! relative difference 
+        ! error = abs((zox -zoxx)/zox)  ! relative difference 
+        error = abs(izox-iizox_errmin)  ! relative difference 
 #ifdef showiter 
-        print*, 'zox',itr,zox, zoxx, error
+        print*, 'zox',itr,izox, iizox_errmin
 #endif
-        if (zox==zoxx) exit 
+        ! if (zox==zoxx) exit 
          
-        zox = 0.5d0*(zox + zoxx)  ! new zox 
+        ! zox = 0.5d0*(zox + zoxx)  ! new zox 
 
         ! if iteration reaches 100 error in zox is tested assuming individual grid depths as zox and find where error gets minimized 
-        if (itr>=100 .and. itr <= nz+99) then 
-            zox = z(itr-99) ! zox value in next test 
-            if (minerr >=error ) then ! if this time error is less than last adopt as optimum 
-                if (itr/=100) then 
-                    izox_minerr = itr -100
-                    minerr = error 
-                endif 
-            endif
-        elseif (itr ==nz+100) then ! check last test z(nz)
-            if (minerr >=error ) then 
-                izox_minerr = itr -100
-                minerr = error 
-            endif
-            zox = z(izox_minerr)  ! determine next test which should be most optimum 
-        elseif (itr ==nz+101) then  ! results should be optimum and thus exit 
-            exit
+        ! if (itr>=100 .and. itr <= nz+99) then 
+            ! zox = z(itr-99) ! zox value in next test 
+            ! if (minerr >=error ) then ! if this time error is less than last adopt as optimum 
+                ! if (itr/=100) then 
+                    ! izox_minerr = itr -100
+                    ! minerr = error 
+                ! endif 
+            ! endif
+        ! elseif (itr ==nz+100) then ! check last test z(nz)
+            ! if (minerr >=error ) then 
+                ! izox_minerr = itr -100
+                ! minerr = error 
+            ! endif
+            ! zox = z(izox_minerr)  ! determine next test which should be most optimum 
+        ! elseif (itr ==nz+101) then  ! results should be optimum and thus exit 
+            ! exit
+        ! endif 
+
+        ! if (itr >nz+101) then 
+            ! stop
+        ! endif
+        if (izox==iizox_errmin) exit 
+        
+        if (error < minerr ) then 
+            minerr = error 
+        else 
+            if (izox < nz .and. iizox_errmin == nz) then 
+            
+                call o2calc_sbox(  &
+                    o2x  & ! output
+                    ,izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                    )
+                ! fluxes relevant to oxygen 
+                call calcflxo2_sbox( &
+                    o2dec,o2dif,o2tflx,o2res  & ! output 
+                    ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
+                    )
+                exit 
+                
+            endif 
         endif 
-
-        if (itr >nz+101) then 
-            stop
-        endif
-
+        
         itr = itr + 1
 
     enddo 
 
     !~~  OM & O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    do iz = 1,nz 
-        if (o2x(iz) > o2th) then
-            oxco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! aerobic respiration 
-        else 
-            ! o2x(iz) = o2th
-            if (anoxic) then 
-                anco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! anaerobic respiration 
-            endif
-        endif
-    enddo
+    ! do iz = 1,nz 
+        ! if (o2x(iz) > o2th) then
+            ! oxco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! aerobic respiration 
+        ! else 
+            ! if (anoxic) then 
+                ! anco2(iz) = (1d0-poro(iz))*kom(iz)*omx(iz)  ! anaerobic respiration 
+            ! endif
+        ! endif
+    ! enddo
+    
+    oxco2(:) = (1d0-poro(:))*kom_ox(:)*omx(:)
+    anco2(:) = (1d0-poro(:))*kom_an(:)*omx(:)
 
     do iz=1,nz
         dw(iz) = dw(iz) -(1d0-poro(iz))*mvom*kom(iz)*omx(iz)  !! burial rate change need reflect volume change caused by chemical reactions 
@@ -611,7 +732,21 @@ do
         ,tol,poroi,flg_500,fact,file_tmp,alki,dici,ccx_th,workdir  &
         ,krad,deccc  & 
         )
-    if (flg_500) go to 500
+    if (flg_500) then 
+        dt = dt/10d0
+#ifdef sense
+        ! go to 500
+        ccx = cc
+        alkx = alk
+        dicx = dic
+        w = w_save 
+        call calcupwindscheme(  &
+            up,dwn,cnr,adf & ! output 
+            ,w,nz   & ! input &
+            )
+        go to 600
+#endif 
+    endif 
     ! ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
     ! update aqueous co2 species 
 #ifndef mocsy
@@ -619,7 +754,16 @@ do
     if (infosbr==1) then 
         dt=dt/10d0
 #ifdef sense
-        go to 500
+        ! go to 500
+        ccx = cc
+        alkx = alk
+        dicx = dic
+        w = w_save 
+        call calcupwindscheme(  &
+            up,dwn,cnr,adf & ! output 
+            ,w,nz   & ! input &
+            )
+        go to 600
 #else
         stop
 #endif 
@@ -683,6 +827,11 @@ do
         ,detflx,ccflx,nspcc,omflx,dw,dz,poro,nz    & ! input
         ,msed,mvsed,mvcc,mvom,poroi &
         )
+    ! call burialcalc_fdm(  &
+        ! w       & !  output
+        ! ,detflx,ccflx,nspcc,omflx,dw,dz,poro,nz    & ! input
+        ! ,msed,mvsed,mvcc,mvom,poroi,up,dwn,cnr,adf,sporo,sporof,file_tmp,workdir &
+        ! )
 
     ! ------------ determine calculation scheme for advection 
     call calcupwindscheme(  &
@@ -693,15 +842,18 @@ do
     ! error and iteration evaluation 
     itr_w = itr_w + 1  ! counting iteration for w 
     err_w = maxval(abs((w-wx)/wx))  ! relative difference of w 
+#ifdef showiter
+    print*,'itr_w,err_w',itr_w,err_w 
+#endif 
     if (err_w<err_w_min) then 
         err_w_min= err_w  ! recording minimum relative difference of  w 
         wxx = wx  ! recording w which minimizes deviation of total sld fraction from 1 
     endif 
-    if (itr_w>100) then   ! if iteration gets too many, force to end with optimum w where error is minimum
-        if (itr_w==101) then 
+    if (itr_w>itr_w_max) then   ! if iteration gets too many, force to end with optimum w where error is minimum
+        if (itr_w==itr_w_max+1) then 
             w = wxx   
             go to 300
-        elseif (itr_w==102) then 
+        elseif (itr_w==itr_w_max+2) then 
             w = wxx
             write(file_err,*) 'not converging w',time, err_w, err_w_min
             go to 400
@@ -807,6 +959,7 @@ do
     !!!!! PRINTING RESULTS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifndef nonrec
     if (time>=rectime(cntrec)) then
+#ifndef nondisp
         print*,'****** TIME TO RECORD *********'
         print*,time,cntrec
         call recordprofile(  &
@@ -818,7 +971,7 @@ do
         print*
         print*
         print*
-        
+#endif 
         cntrec = cntrec + 1
         if (cntrec == nrec+1) exit
     endif 
@@ -841,7 +994,7 @@ do
     !! in theory, o2dec/ox2om + alkdec = dicdec = omdec (in absolute value)
     if (om2cc /= 0d0) then 
         if ( abs((o2dec/ox2om - alkdec + dicdec)/dicdec) > tol) then 
-            print*, abs((o2dec/ox2om + alkdec - dicdec)/dicdec) ,o2dec/ox2om,alkdec,dicdec
+            print*, 'chk_om_dec',abs((o2dec/ox2om + alkdec - dicdec)/dicdec) ,o2dec/ox2om,alkdec,dicdec
             write(file_err,*) trim(adjustl(dumchr(1))), time, dt &
                 , abs((o2dec/ox2om + alkdec - dicdec)/dicdec),o2dec/ox2om,alkdec,dicdec
         endif
@@ -892,7 +1045,7 @@ call closefiles(  &
 
 ! recording end results for lysoclines and caco3 burial fluxes
 call resrec(  &
-    workdir,anoxic,nspcc,labs,turbo2,nobio,co3i,co3sat,mcc,ccx,nz,rho,frt,ccadv,file_tmp,izml,chr  &
+    workdir,anoxic,nspcc,labs,turbo2,nobio,co3i,co3sat,mcc,ccx,nz,rho,frt,ccadv,file_tmp,izml,chr,dt,it,time  &
     )
 
 endsubroutine caco3
@@ -937,12 +1090,16 @@ endsubroutine makegrid
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
-subroutine getinput(ccflxi,om2cc,dt,filechr,dep)
+subroutine getinput(ccflxi,om2cc,dti,filechr,dep,anoxic,nobio,labs,turbo2,nspcc)
 implicit none 
+integer(kind=4),intent(in)::nspcc
 integer(kind=4) narg,ia
 character*25 arg
-real(kind=8),intent(out)::ccflxi,om2cc,dt,dep
+real(kind=8),intent(out)::ccflxi,om2cc,dti,dep
+logical,intent(out)::anoxic,nobio(nspcc+2),labs(nspcc+2),turbo2(nspcc+2)
 character*255,intent(out):: filechr
+logical ox_tmp 
+character*10:: biotchr
 
 narg = iargc()
 do ia = 1, narg,2
@@ -959,12 +1116,50 @@ do ia = 1, narg,2
             read(arg,*)dep  ! reading water depth in km 
         case('dt','DT','Dt')
             call getarg(ia+1,arg)
-            read(arg,*)dt   ! reading time step used in calculation 
+            read(arg,*)dti   ! reading time step used in calculation 
         case('fl','FL','Fl')
             call getarg(ia+1,arg)
             read(arg,*)filechr  ! reading file name that store sediment profiles etc. 
+        case('ox','OX','Ox')
+            call getarg(ia+1,arg)
+            read(arg,*)ox_tmp  ! reading file name that store sediment profiles etc.
+            anoxic = .not. ox_tmp
+        case('biot','BIOT','Biot')
+            call getarg(ia+1,arg)
+            read(arg,*)biotchr  ! character to define styles of bioturbation
+            select case(trim(biotchr))
+                case('labs','LABS','Labs')
+                    print*
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXXXXX LABS mixing XXXXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*
+                    labs = .true.
+                case('nobio','NOBIO','Nobio')
+                    print*
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXXXX No bioturbation XXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*
+                    nobio=.true.
+                case('turbo2','TURBO2','Turbo2')
+                    print*
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXX Homogeneous mixing XXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*
+                    turbo2 = .true.
+                case default 
+                    print*
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXX Fickian mixing XXXXXXXXXXXXXXXX'
+                    print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+                    print*
+            endselect
     end select
 enddo
+
+! stop
 
 endsubroutine getinput 
 !**************************************************************************************************************************************
@@ -1034,6 +1229,7 @@ workdir = trim(adjustl(workdir))//'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(a
     //'_'//trim(adjustl(filechr))
 #endif
 ! workdir = trim(adjustl(workdir))//'-'//trim(adjustl(dumchr(1)))  ! adding date
+#ifndef nonrec
 call system ('mkdir -p '//trim(adjustl(workdir)))
 workdir = trim(adjustl(workdir))//'/'
 open(unit=file_ptflx,file=trim(adjustl(workdir))//'ptflx.txt',action='write',status='unknown') ! recording fluxes of clay
@@ -1054,7 +1250,7 @@ do isp = 1,nspcc
     open(unit=file_ccflxes(isp),file=trim(adjustl(workdir))//'ccflx-sp_'//trim(adjustl(dumchr(1))) &
         //'.txt',action='write',status='unknown')
 enddo
-
+#endif 
 endsubroutine makeprofdir 
 !**************************************************************************************************************************************
 
@@ -1352,7 +1548,7 @@ logical,intent(out)::nonlocal(nspcc+2)
 integer(kind=4),intent(out)::izrec,izrec2,izml
 integer(kind=4) nlabs,ilabs,iz,isp
 real(kind=8) :: translabs(nz,nz),translabs_tmp(nz,nz),dbio(nz),transdbio(nz,nz),transturbo2(nz,nz)
-real(kind=8) :: zml(nspcc+2),zrec,zrec2
+real(kind=8) :: zml(nspcc+2),zrec,zrec2,probh
 character*25 dumchr(3)
 
 !~~~~~~~~~~~~ loading transition matrix from LABS ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1369,7 +1565,7 @@ endif
 
 if (.true.) then  ! devided by the time duration when transition matrices are created in LABS and weakening by a factor
 ! if (.false.) then 
-    translabs = translabs *365.25d0/10d0*1d0/2.3d0  
+    translabs = translabs *365.25d0/10d0*1d0/3d0  
     ! translabs = translabs *365.25d0/10d0*1d0/10d0
 endif
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1425,9 +1621,10 @@ do isp=1,nspcc+2
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
     ! transition matrix for random mixing 
     transturbo2 = 0d0
-    transturbo2(:izml,:izml) = 0.0015d0/1d0  ! arbitrary assumed probability 
+    probh = 0.0010d0
+    transturbo2(:izml,:izml) = probh  ! arbitrary assumed probability 
     do iz=1,izml  ! when i = j, transition matrix contains probabilities with which particles are moved from other layers of sediment   
-       transturbo2(iz,iz)=-0.0015d0*(izml-1)/1d0  
+       transturbo2(iz,iz)=-probh*(izml-1)  
     enddo
 
     if (turbo2(isp)) translabs = transturbo2   ! translabs temporarily used to represents nonlocal mixing 
@@ -1927,25 +2124,109 @@ endsubroutine timestep
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
+subroutine calc_zox( &
+    izox,kom,zox,kom_ox,kom_an   &  ! output 
+    ,oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  & ! input
+    )
+implicit none
+integer(kind=4),intent(in)::nz
+real(kind=8),intent(in)::o2x(nz),o2th,komi,ztot,z(nz),dz(nz),o2i
+logical,intent(in)::oxic,anoxic
+integer(kind=4),intent(out)::izox
+real(kind=8),intent(out)::kom(nz),zox,kom_ox(nz),kom_an(nz)
+logical izox_calc_done 
+integer(kind=4) iz
+real(kind=8)::tol=1d-6
+
+! izox_calc_done = .false.
+! if (oxic) then 
+    ! do iz=1,nz
+        ! if (o2x(iz) > o2th) then
+            ! kom(iz) = komi
+            ! if (.not. izox_calc_done) izox = iz
+        ! else! unless anoxi degradation is allowed, om cannot degradate below zox
+            ! kom(iz) = 0d0
+            ! if (anoxic) kom(iz) = komi
+            ! izox_calc_done = .true.
+        ! endif
+    ! enddo
+! endif
+
+!! calculation of zox 
+zox = 0d0
+do iz=1,nz
+    if (o2x(iz)<=0d0) exit
+enddo
+
+if (iz==nz+1) then ! oxygen never gets less than 0 
+    zox = ztot ! zox is the bottom depth 
+else if (iz==1) then ! calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
+    zox = (z(iz)*o2i*1d-6/1d3 + 0d0*abs(o2x(iz)))/(o2i*1d-6/1d3+abs(o2x(iz)))
+else if (iz==2) then 
+    zox = z(iz-1) - o2x(iz-1)/((o2i*1d-6/1d3 - o2x(iz-1))/(0d0-z(iz-1)))
+else     ! calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
+    ! zox = (z(iz)*o2x(iz-1) + z(iz-1)*abs(o2x(iz)))/(o2x(iz-1)+abs(o2x(iz)))
+    zox = z(iz-1) - o2x(iz-1)/((o2x(iz-2) - o2x(iz-1))/(z(iz-2)-z(iz-1)))
+endif
+
+! calculation of kom 
+kom = 0d0
+kom_ox = 0d0
+kom_an = 0d0
+izox = 0 
+if (anoxic) then 
+    kom = komi
+    do iz=1,nz
+        if (z(iz)+0.5d0*dz(iz)<=zox) then 
+            kom_ox(iz)=komi
+            if (iz> izox ) izox = iz
+        elseif (z(iz)+0.5d0*dz(iz)>zox .and. z(iz)-0.5d0*dz(iz)< zox) then 
+            kom_ox(iz)=komi* (1d0- ( (z(iz)+0.5d0*dz(iz)) - zox)/dz(iz))
+            kom_an(iz)=komi* (( (z(iz)+0.5d0*dz(iz)) - zox)/dz(iz))
+            if (iz> izox ) izox = iz
+        elseif (z(iz)-0.5d0*dz(iz)>=zox) then 
+            kom_an(iz)=komi
+        endif 
+    enddo 
+    if (.not.all(abs(kom_ox+kom_an-kom)/komi<tol)) then 
+        print*,'error: calc kom',kom_ox,kom_an,kom
+        stop
+    endif 
+else
+    do iz=1,nz
+        if (z(iz)+0.5d0*dz(iz)<=zox) then 
+            kom_ox(iz)=komi
+            if (iz> izox ) izox = iz
+        elseif (z(iz)+0.5d0*dz(iz)>zox .and. z(iz)-0.5d0*dz(iz)< zox) then 
+            kom_ox(iz)=komi* (1d0- ( (z(iz)+0.5d0*dz(iz)) - zox)/dz(iz))
+            if (iz> izox ) izox = iz
+        elseif (z(iz)-0.5d0*dz(iz)>=zox) then 
+            continue
+        endif 
+    enddo 
+    kom = kom_ox
+endif 
+
+endsubroutine calc_zox
+!**************************************************************************************************************************************
+
+!**************************************************************************************************************************************
 subroutine omcalc( &
-    omx,izox  & ! output 
-    ,kom   &  ! in&output
-    ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
-    ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz,o2th,komi &! input 
+    omx  & ! output 
+    ,kom   &  ! input
+    ,om,nz,sporo,sporoi,sporof &! input 
+    ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
     ) 
 implicit none 
 integer(kind=4),intent(in)::nz,nspcc
-real(kind=8),dimension(nz),intent(in)::o2x,om,sporo,w,up,dwn,cnr,adf,poro,dz
-real(kind=8),intent(in)::sporoi,sporof,wi,dt,trans(nz,nz,nspcc+2),omflx,o2th,komi
+real(kind=8),dimension(nz),intent(in)::om,sporo,w,up,dwn,cnr,adf,poro,dz
+real(kind=8),intent(in)::sporoi,sporof,wi,dt,trans(nz,nz,nspcc+2),omflx
 logical,dimension(nspcc+2),intent(in)::labs,turbo2,nonlocal
-logical,intent(in)::oxic,anoxic
 real(kind=8),intent(out)::omx(nz)
-integer(kind=4),intent(out)::izox
-real(kind=8),intent(inout)::kom(nz)
+real(kind=8),intent(in)::kom(nz)
 integer(kind=4) :: nsp,nmx,iz,row,col,iiz,infobls
 integer(kind=4),allocatable::ipiv(:)
 real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:)
-logical izox_calc_done
 
 !  amx and ymx correspond to A and B in Ax = B
 !  dgesv subroutine of BLAS returns the solution x in ymx 
@@ -1967,21 +2248,6 @@ logical izox_calc_done
 !               - B(2) = sporo(2)*(-om(2))/dt
 !
 !  Matrices A and B are filled in this way. Note again amx and ymx correspond A and B, respectively. 
-
-izox_calc_done = .false.
-if (oxic) then 
-    do iz=1,nz
-        if (o2x(iz) > o2th) then
-            kom(iz) = komi
-            ! izox = iz
-            if (.not. izox_calc_done) izox = iz
-        else! unless anoxi degradation is allowed, om cannot degradate below zox
-            kom(iz) = 0d0
-            if (anoxic) kom(iz) = komi
-            izox_calc_done = .true.
-        endif
-    enddo
-endif
     
 nsp=1 ! number of species considered here; 1, only om 
 nmx = nz*nsp ! # of col (& row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns 
@@ -2165,10 +2431,10 @@ endsubroutine calcflxom
 !**************************************************************************************************************************************
 subroutine o2calc_ox(  &
     o2x  & ! output
-    ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,ox2om,o2i & ! input
+    ,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,ox2om,o2i & ! input
     )
 implicit none
-integer(kind=4),intent(in)::nz,izox
+integer(kind=4),intent(in)::nz
 real(kind=8),dimension(nz),intent(in)::poro,o2,kom,omx,sporo,dif_o2,dz
 real(kind=8),intent(in)::dt,ox2om,o2i
 real(kind=8),intent(out)::o2x(nz)
@@ -2475,6 +2741,7 @@ real(kind=8),intent(in)::co3sat
 real(kind=8),intent(in)::krad(nz,nspcc)  ! caco3 decay consts (for 14c alone)
 real(kind=8),intent(out)::deccc(nz,nspcc)  ! radio-active decay rate of caco3 
 real(kind=8)::ddeccc_dcc(nz,nspcc)  ! radio-active decay rate of caco3 
+integer(kind=4)::iter_max = 500
 
 
 ! for genie geochemistry
@@ -2545,7 +2812,7 @@ ymx = 0d0
 #ifndef mocsy
 call calcspecies(dicx,alkx,temp,sal,dep,prox,co2x,hco3x,co3x,nz,infosbr)
 if (infosbr==1) then ! which means error in calculation 
-    dt=dt/10d0
+    ! dt=dt/10d0
 #ifdef sense
     ! go to 500
     flg_500=.true.
@@ -2557,7 +2824,7 @@ endif
 ! calling subroutine from caco3_therm.f90 to calculate derivatives of co3 wrt alk and dic 
 call calcdevs(dicx,alkx,temp,sal,dep,nz,infosbr,dco3_dalk,dco3_ddic)
 if (infosbr==1) then ! if error in calculation 
-    dt=dt/10d0
+    ! dt=dt/10d0
 #ifdef sense
     ! go to 500
     flg_500=.true.
@@ -3071,7 +3338,13 @@ if (any(isnan(alkx))) then
     print*,alkx
     stop
 endif
-
+#ifdef sense
+if (itr > iter_max) then 
+    print*, '....cannot converge...'
+    flg_500 = .true.
+    exit
+endif 
+#endif
 enddo
 
 endsubroutine calccaco3sys
@@ -3530,6 +3803,117 @@ endsubroutine burialcalc
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
+subroutine burialcalc_fdm(  &
+    w       & !  output
+    ,detflx,ccflx,nspcc,omflx,dw,dz,poro,nz    & ! input
+    ,msed,mvsed,mvcc,mvom,poroi,up,dwn,cnr,adf,sporo,sporof,file_tmp,workdir &
+    )
+implicit none
+integer(kind=4),intent(in)::nz,nspcc,file_tmp
+real(kind=8),intent(in)::detflx,ccflx(nspcc),omflx,dw(nz),dz(nz),poro(nz),msed,mvsed,mvcc(nspcc),mvom,poroi
+real(kind=8),intent(out)::w(nz)
+real(kind=8),dimension(nz),intent(in)::up,dwn,cnr,adf,sporo
+real(kind=8),intent(in)::sporof
+character*255,intent(in)::workdir
+integer(kind=4)::iz
+
+integer(kind=4)::nsp,nmx,row,infobls
+integer(kind=4),allocatable::ipiv(:)
+real(kind=8),allocatable::amx(:,:),ymx(:),emx(:)
+
+! w is up dated by solving 
+!           d(1 - poro)*w/dz = dw
+! note that dw has recorded volume changes by reactions and non-local mixing (see Eqs. B2 and B6 in ms)
+! finite difference form is 
+!           if (iz/=1) {(1-poro(iz))*w(iz)-(1-poro(iz-1))*w(iz-1)}/dz(iz) = dw(iz)          
+!           if (iz==1) (1-poro(iz))*w(iz) = total volume flux + dw(iz)*dz(iz)          
+! which leads to the following calculations 
+
+nsp = 1 !  only consider burial rate
+nmx = nz*nsp  ! matrix is linear and solved like om and o2, so see comments there for calculation procedures 
+if (allocated(amx))deallocate(amx)
+if (allocated(ymx))deallocate(ymx)
+if (allocated(emx))deallocate(emx)
+if (allocated(ipiv))deallocate(ipiv)
+! deallocate(amx,ymx,emx,ipiv)
+allocate(amx(nmx,nmx),ymx(nmx),emx(nmx),ipiv(nmx))
+    
+amx = 0d0
+ymx = 0d0
+
+do iz=1,nz
+    row=iz
+    if (iz==1) then 
+        amx(row,row) = adf(iz)*up(iz)*(sporo(iz)*1d0-0d0)/dz(iz)  &
+            + adf(iz)*dwn(iz)*(0d0-sporo(iz)*1d0)/dz(iz)  
+        amx(row,row+1) =   &
+            + adf(iz)*cnr(iz)*(sporo(iz+1)*1d0-0d0)/dz(iz)  &
+            + adf(iz)*dwn(iz)*(sporo(iz+1)*1d0-0d0)/dz(iz)  
+        ymx(row) = adf(iz)*up(iz)*(-(detflx/msed*mvsed + sum(ccflx*mvcc) +omflx*mvom))/dz(iz)  &  
+            + adf(iz)*cnr(iz)*(-(detflx/msed*mvsed + sum(ccflx*mvcc) +omflx*mvom))/dz(iz)  &  
+            - dw(iz)
+    elseif (iz==nz) then 
+        amx(row,row) = adf(iz)*up(iz)*(sporo(iz)*1d0-0d0)/dz(iz)  &
+            + adf(iz)*dwn(iz)*(sporof*1d0-sporo(iz)*1d0)/dz(iz)  &
+            + adf(iz)*cnr(iz)*(sporof*1d0-0d0)/dz(iz)  
+        amx(row,row-1) = adf(iz)*up(iz)*(0d0-sporo(iz-1)*1d0)/dz(iz)  &
+            + adf(iz)*cnr(iz)*(0d0-sporo(iz-1)*1d0)/dz(iz)  
+        ymx(row) = - dw(iz)
+    else  
+        amx(row,row) = adf(iz)*up(iz)*(sporo(iz)*1d0-0d0)/dz(iz)  &
+            + adf(iz)*dwn(iz)*(0d0-sporo(iz)*1d0)/dz(iz) 
+        amx(row,row-1) = adf(iz)*up(iz)*(0d0-sporo(iz-1)*1d0)/dz(iz)  &
+            + adf(iz)*cnr(iz)*(0d0-sporo(iz-1)*1d0)/dz(iz)  
+        amx(row,row+1) = adf(iz)*dwn(iz)*(sporo(iz+1)*1d0-0d0)/dz(iz)  &
+            + adf(iz)*cnr(iz)*(sporo(iz)*1d0-0d0)/dz(iz)  
+        ymx(row) = - dw(iz)
+    endif 
+enddo
+
+ymx=-ymx
+
+#ifndef nonrec
+if (any(isnan(ymx))) then 
+    print*,'NAN in ymx:w'
+    open(unit=file_tmp,file=trim(adjustl(workdir))//'chk_ymx_pre_w.txt',status = 'unknown')
+    do iz = 1, nmx
+        write (file_tmp,*) ymx(iz)
+    enddo
+    close(file_tmp)
+    stop
+endif
+#endif 
+
+call dgesv(nmx,int(1),amx,nmx,ipiv,ymx,nmx,infobls) 
+
+#ifndef nonrec
+if (any(isnan(amx))) then
+    print*,'NAN in amx:w'
+    open(unit=file_tmp,file=trim(adjustl(workdir))//'chk_amx_w.txt',status = 'unknown')
+    do iz = 1, nmx
+        write (file_tmp,*) amx(iz,:)
+    enddo
+    close(file_tmp)
+    stop
+endif
+
+if (any(isnan(ymx))) then 
+    print*,'NAN in ymx:w'
+    open(unit=file_tmp,file=trim(adjustl(workdir))//'chk_ymx_w.txt',status = 'unknown')
+    do iz = 1, nmx
+        write (file_tmp,*) ymx(iz)
+    enddo
+    close(file_tmp)
+    stop
+endif
+#endif
+
+w = ymx
+
+endsubroutine burialcalc_fdm
+!**************************************************************************************************************************************
+
+!**************************************************************************************************************************************
 subroutine resdisplay(  &
     nz,nspcc,it &
     ,z,frt,omx,rho,o2x,dicx,alkx,ptx,w &
@@ -3669,7 +4053,7 @@ endsubroutine closefiles
 
 !**************************************************************************************************************************************
 subroutine resrec(  &
-    workdir,anoxic,nspcc,labs,turbo2,nobio,co3i,co3sat,mcc,ccx,nz,rho,frt,ccadv,file_tmp,izml,chr  &
+    workdir,anoxic,nspcc,labs,turbo2,nobio,co3i,co3sat,mcc,ccx,nz,rho,frt,ccadv,file_tmp,izml,chr,dt,it,time  &
     )
 implicit none
 integer(kind=4),intent(in)::nspcc,file_tmp,nz,izml
@@ -3681,6 +4065,8 @@ character*255,intent(inout)::workdir
 logical,intent(in)::anoxic
 logical,dimension(nspcc+2),intent(in)::labs,turbo2,nobio
 character*25,intent(in)::chr(3,4)
+real(kind=8),intent(in)::dt,time
+integer(kind=4),intent(in)::it
 
 workdir = 'C:/Users/YK/Desktop/Sed_res/'
 workdir = trim(adjustl(workdir))//'test-translabs/res/'
@@ -3706,13 +4092,14 @@ open(unit=file_tmp,file=trim(adjustl(workdir))//'lys_sense_'//    &
     'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
     //'.txt',action='write',status='unknown',access='append') 
 write(file_tmp,*) 1d6*(co3i*1d3-co3sat), sum(ccx(1,:)*mcc(:))/rho(1)*100d0, frt(1)  &
-    ,sum(ccx(nz,:)*mcc(:))/rho(nz)*100d0, frt(nz),sum(ccx(izml,:)*mcc(:))/rho(izml)*100d0, frt(izml)
+    ,sum(ccx(nz,:)*mcc(:))/rho(nz)*100d0, frt(nz),sum(ccx(izml,:)*mcc(:))/rho(izml)*100d0, frt(izml)  &
+    ,dt,it,time 
 close(file_tmp)
 
 open(unit=file_tmp,file=trim(adjustl(workdir))//'ccbur_sense_'// &
     'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
     //'.txt',action='write',status='unknown',access='append') 
-write(file_tmp,*) 1d6*(co3i*1d3-co3sat), 1d6*sum(ccadv)
+write(file_tmp,*) 1d6*(co3i*1d3-co3sat), 1d6*sum(ccadv),dt,it,time 
 close(file_tmp)
 
 endsubroutine resrec
