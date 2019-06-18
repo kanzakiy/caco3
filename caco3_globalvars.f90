@@ -40,9 +40,9 @@ real(kind=8) :: dici = 2154d0 ! uM   ! a reference DIC from mocsy
 #endif 
 real(kind=8) :: o2i = 165d0 ! uM     ! a reference O2 ; MUDS
 ! real(kind=8) :: komi = 2d0  ! /yr  ! a reference om degradation rate const.; MUDS 
-real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary 
+! real(kind=8) :: komi = 0.5d0  ! /yr  ! arbitrary 
 ! real(kind=8) :: komi = 0.1d0  ! /yr  ! Canfield 1994
-! real(kind=8) :: komi = 0.06d0  ! /yr  ! ?? Emerson 1985? who adopted relatively slow decomposition rate 
+real(kind=8) :: komi = 0.06d0  ! /yr  ! ?? Emerson 1985? who adopted relatively slow decomposition rate 
 ! real(kind=8) :: kcci = 10.0d0*365.25d0  ! /yr; a reference caco3 dissolution rate const. 
 #ifndef nodissolve
 real(kind=8) :: kcci = 1d0*365.25d0  ! /yr  ;cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
@@ -63,7 +63,7 @@ real(kind=8) :: rhocc = 2.71d0 ! g/cm3 organic particle density
 real(kind=8) :: mom = 30d0 ! g/mol OM assuming CH2O
 ! real(kind=8) :: msed = 87.11d0 ! g/mol arbitrary sediment g/mol assuming opal (SiO2•n(H2O) )
 real(kind=8) :: msed = 258.16d0 ! g/mol arbitrary sediment g/mol assuming kaolinite ( 	Al2Si2O5(OH)4 )
-real(kind=8) :: mcc = 100d0 ! g/mol CaCO3 
+real(kind=8) :: mcc(nspcc) = 100d0 ! g/mol CaCO3 
 real(kind=8) :: ox2om = 1.3d0 ! o2/om ratio for om decomposition (Emerson 1985; Archer 1991)
 real(kind=8) :: om2cc = 0.666d0  ! rain ratio of organic matter to calcite
 ! real(kind=8) :: om2cc = 0.5d0  ! rain ratio of organic matter to calcite
@@ -77,7 +77,7 @@ real(kind=8) zml(nspcc+2) , zrec, zrec2  ! mixed layer depth, sediment depth whe
 real(kind=8) chgf  ! variable to check change in total fraction of solid materials
 real(kind=8) flxfin, flxfini, flxfinf  !  flux ratio of fine particles: i and f denote initial and final values  
 real(kind=8) pore_max, exp_pore, calgg  ! parameters to determine porosity in Archer (1991) 
-real(kind=8) mvom, mvsed, mvcc  ! molar volumes (cm3 mol-1) mv_i = m_i/rho_i where i = om, sed and cc for organic matter, clay and caco3, respectively
+real(kind=8) mvom, mvsed, mvcc(nspcc)  ! molar volumes (cm3 mol-1) mv_i = m_i/rho_i where i = om, sed and cc for organic matter, clay and caco3, respectively
 real(kind=8) keq1, keq2  ! equilibrium const. for h2co3 and hco3 dissociations and functions to calculate them  
 real(kind=8) co3sat, keqag  ! co3 conc. at caco3 saturation and solubility product of aragonite  
 real(kind=8) zox, zoxx  ! oxygen penetration depth (cm) and its dummy variable 
