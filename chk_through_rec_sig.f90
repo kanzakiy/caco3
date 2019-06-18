@@ -21,10 +21,7 @@ integer(kind=4) interval  ! choose value between 1 to nz
 interval =10 ! choose a value between 1 to nz; om depth profile is shown with this interval; e.g., if inteval = nz, om conc. at all depths are shown
 ! e.g., if interval = 5, om conc. at 5 depths are shown   
 
-workdir = './2105_recprofile_signaltrack_fickian/' ! working directory
-call system ('mkdir -p '//trim(adjustl(workdir)))
-workdir = trim(adjustl(workdir))//'/'
-
+workdir = './' ! working directory
 
 #ifdef allnobio 
 nobio = .true.
@@ -59,7 +56,7 @@ call makegrid(beta,nz,ztot,dz,z)
 ! call getporosity() ! assume porosity profile 
 call getporosity(  &
      poro,porof,sporo,sporof,sporoi & ! output
-     ,z,nz  & ! input
+     ,z,nz,poroi  & ! input
      )
 
 !!!!!!!!!!!!! flx assignement and initial guess for burial rate !!!!!!!!!!!!!!!!!!!!!!
@@ -76,8 +73,8 @@ mvcc = mcc/rhocc ! caco3
 ! call burial_pre() ! initial guess of burial profile, requiring porosity profile  
 call burial_pre(  &
     w,wi  & ! output
-    ,detflx,ccflx,nspcc,nz  & ! input 
-    )  
+    ,detflx,ccflx,nspcc,nz,poroi,msed,mvsed,mvcc  & ! input 
+    )
 ! call dep2age() ! depth -age conversion 
 call dep2age(  &
     age &  ! output 
@@ -96,7 +93,11 @@ call calcupwindscheme(  &
 
 
 !!! ~~~~~~~~~~~~~~ set recording time 
-call recordtime()
+! call recordtime()
+call recordtime(  &
+    rectime,time_spn,time_trs,time_aft,cntrec  &
+    ,ztot,wi,file_tmp,workdir,nrec  &
+    )
 
 depi = 4d0  ! depth before event 
 depf = dep   ! max depth to be changed to  
@@ -110,7 +111,11 @@ d13c_ocnf = -1d0 ! ocean d13c value with maximum change
 d18o_ocni = 1d0 ! initial ocean d18o value 
 d18o_ocnf = -1d0 ! ocean d18o value with maximum change 
 
-call sig2sp_pre() ! end-member signal assignment 
+! call sig2sp_pre() ! end-member signal assignment 
+call sig2sp_pre(  &  ! end-member signal assignment 
+    d13c_sp,d18o_sp  &
+    ,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf,nspcc  &
+    ) 
 
 
 
@@ -125,13 +130,13 @@ call sig2sp_pre() ! end-member signal assignment
 ! call make_transmx()
 call make_transmx(  &
     trans,izrec,izrec2,izml,nonlocal  & ! output 
-    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z  & ! input
+    ,labs,nspcc,turbo2,nobio,dz,sporo,nz,z,file_tmp,zml_ref  & ! input
     )
 
 ! call coefs(temp,sal,dep)  ! need to specify diffusion coefficient as well as om decomposition rate const. etc.
 call coefs(  &
     dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
-    ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+    ,temp,sal,dep,nz,nspcc,poro,cai,komi,kcci  & !  input 
     )
 
 om = 1d-8  ! assume an arbitrary low conc. 
@@ -176,9 +181,20 @@ do   ! <<<----------------------------------------------------------------------
 
     !! ///////// isotopes & fluxes settings ////////////// 
 #ifndef sense    
-    call timestep(time,800,5000,1000,dt) ! determine time step dt by calling timestep(time,nt_spn,nt_trs,nt_aft,dt) where nt_xx denotes total iteration number  
-    call signal_flx(time)
-    call bdcnd(time,dep)
+    ! call timestep(time,800,5000,1000,dt) ! determine time step dt by calling timestep(time,nt_spn,nt_trs,nt_aft,dt) where nt_xx denotes total iteration number  
+    nt_spn = 800
+    nt_trs = 5000
+    nt_aft = 1000
+    call timestep(time,nt_spn,nt_trs,nt_aft,dt,time_spn,time_trs,time_aft)
+    ! call signal_flx(time)
+    call signal_flx(  &
+        d13c_ocn,d18o_ocn,ccflx,d18o_sp,d13c_sp,cntsp  &
+        ,time,time_spn,time_trs,time_aft,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf,nspcc,ccflxi,it,flxfini,flxfinf  &
+        ) 
+    ! call bdcnd(time,dep)
+    call bdcnd(   &
+        time,dep,time_spn,time_trs,time_aft,depi,depf  &
+        ) 
 #endif 
 
     ! isotope signals represented by caco3 rain fluxes 
@@ -208,7 +224,7 @@ do   ! <<<----------------------------------------------------------------------
     ! call coefs(temp,sal,dep)
     call coefs(  &
         dif_dic,dif_alk,dif_o2,kom,kcc,co3sat & ! output 
-        ,temp,sal,dep,nz,nspcc,poro,cai  & !  input 
+        ,temp,sal,dep,nz,nspcc,poro,cai,komi,kcci  & !  input 
         )
     !! /////////////////////
 !********************************************************************************************************************************  ADDED-END
@@ -235,13 +251,14 @@ do   ! <<<----------------------------------------------------------------------
             omx,izox  & ! output 
             ,kom   &  ! in&output
             ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof &! input 
-            ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz &! input 
+            ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz,o2th,komi &! input 
             ) 
         ! calculating the fluxes relevant to om diagenesis (and checking the calculation satisfies the difference equations )
         ! call calcflxom()
         call calcflxom(  &
             omadv,omdec,omdif,omrain,omres,omtflx  & ! output 
             ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc,omflx  & ! input 
+            ,file_tmp,workdir &
             )
         
         ! print*,'~~~~ conc ~~~~'
@@ -258,23 +275,23 @@ do   ! <<<----------------------------------------------------------------------
             ! call o2calc_ox()  ! o2 calculation when o2 penetration depth (zox) is the same as bottom depth. 
             call o2calc_ox(  &
                 o2x  & ! output
-                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,ox2om,o2i & ! input
                 )
             ! call calcflxo2_ox() !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
             call calcflxo2_ox( &
                 o2dec,o2dif,o2tflx,o2res  & ! output 
-                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x  & ! input
+                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,ox2om,o2i  & ! input
                 )
         else  !! if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
             ! call o2calc_sbox() ! o2 calculation when o2 is depleted within the calculation domain.
             call o2calc_sbox(  &
                 o2x  & ! output
-                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt & ! input
+                ,izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,ox2om,o2i & ! input
                 )
             ! call calcflxo2_sbox() ! fluxes relevant to oxygen 
             call calcflxo2_sbox( &
                 o2dec,o2dif,o2tflx,o2res  & ! output 
-                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox  & ! input
+                ,nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox,ox2om,o2i  & ! input
                 )
         endif
         
@@ -376,7 +393,9 @@ do   ! <<<----------------------------------------------------------------------
     call calccaco3sys(  &
         ccx,dicx,alkx,rcc,dt  & ! in&output
         ,nspcc,dic,alk,dep,sal,temp,labs,turbo2,nonlocal,sporo,sporoi,sporof,poro,dif_alk,dif_dic & ! input
-        ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,omega,nz  & ! input
+        ,w,up,dwn,cnr,adf,dz,trans,cc,oxco2,anco2,co3sat,kcc,ccflx,ncc,ohmega,nz  & ! input
+        ! ,dum_sfcsumocn  & ! input for genie geochemistry
+        ,tol,poroi,flg_500,fact,file_tmp,alki,dici,ccx_th,workdir  &
         )
     if (flg_500) then
         print*,'error after calccaco3sys'
@@ -397,6 +416,7 @@ do   ! <<<----------------------------------------------------------------------
          ,dw & ! inoutput
          ,nspcc,ccx,cc,dt,dz,rcc,adf,up,dwn,cnr,w,dif_alk,dif_dic,dic,dicx,alk,alkx,oxco2,anco2,trans    & ! input
          ,turbo2,labs,nonlocal,sporof,it,nz,poro,sporo        & ! input
+         ,dici,alki,file_err,mvcc,tol,flg_500  &
          )
     ! end of caco3 calculations 
     
@@ -406,12 +426,14 @@ do   ! <<<----------------------------------------------------------------------
         ptx                  &  ! output
         ,nz,sporo,pt,dt,w,dz,detflx,adf,up,dwn,cnr,trans  &  ! input
         ,nspcc,labs,turbo2,nonlocal,poro,sporof     &  !  intput
+        ,msed,file_tmp,workdir &
         )
     ! call calcflxclay()
     call calcflxclay( &
         pttflx,ptdif,ptadv,ptres,ptrain  & ! output
         ,dw          &  ! in&output
         ,nz,sporo,ptx,pt,dt,dz,detflx,w,adf,up,dwn,cnr,sporof,trans,nspcc,turbo2,labs,nonlocal,poro           &  !  input
+        ,msed,mvsed  &
         )
     ! end of clay calculation 
     
@@ -421,6 +443,7 @@ do   ! <<<----------------------------------------------------------------------
     call getsldprop(  &
         rho,frt,       &  ! output
         nz,omx,ptx,ccx,nspcc,w,up,dwn,cnr,adf,z      & ! input
+        ,mom,msed,mcc,mvom,mvsed,mvcc,file_tmp,workdir  &
         )
 
     err_f = maxval(abs(frt - 1d0))  ! new error in total vol. fraction (must be 1 in theory) 
@@ -430,8 +453,9 @@ do   ! <<<----------------------------------------------------------------------
 
     ! call burialcalc() ! get new burial velocity
     call burialcalc(  &
-        w,wi         & !  output
+        w,wi        & !  output
         ,detflx,ccflx,nspcc,omflx,dw,dz,poro,nz    & ! input
+        ,msed,mvsed,mvcc,mvom,poroi &
         )
 
     !  determine calculation scheme for advection 
@@ -487,14 +511,21 @@ do   ! <<<----------------------------------------------------------------------
     ! recording 
     
     if (time>=rectime(cntrec)) then 
-        call recordprofile(cntrec )
+        call recordprofile(  &
+            cntrec,file_tmp,workdir,nz,z,age,pt,rho,cc,ccx,dic,dicx,alk,alkx,co3,co3x,nspcc,msed,wi,co3sat,rcc  &
+            ,pro,o2x,oxco2,anco2,om,mom,mcc,d13c_ocni,d18o_ocni,up,dwn,cnr,adf,ptx,w,frt,prox,omx,d13c_blk,d18o_blk  &
+            )
         
         cntrec = cntrec + 1
         if (cntrec == nrec+1) exit
     endif 
     
     
-    call sigrec()  ! recording signals at 3 different depths (btm of mixed layer, 2xdepths of btm of mixed layer and btm depth of calculation domain)
+    ! call sigrec()  ! recording signals at 3 different depths (btm of mixed layer, 2xdepths of btm of mixed layer and btm depth of calculation domain)
+    call sigrec(  &
+        nz,file_sigmly,file_sigmlyd,file_sigbtm,w,time,age,izrec,d13c_blk,d13c_blkc &
+        ,d13c_blkf,d18o_blk,d18o_blkc,d18o_blkf,ccx,mcc,rho,ptx,msed,izrec2,nspcc  &
+        )
     
     
 !********************************************************************************************************************************  ADDED-END
