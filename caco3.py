@@ -26,8 +26,10 @@ def calceq1(tmp,sal,dep):
               +(coeff[3]*sal**0.5+coeff[4]*sal)/tmp_k  \
               +coeff[5]*sal**0.5*np.log(tmp_k)
     calceq1=10.**(-calceq1)
-    calceq1*=np.exp((-(-15.82e0-0.0219e0*tmp)*pres
-                     +0.5e0*(1.13e-3-0.1475e-3*tmp)*pres*pres)/83.131e0/tmp_k)
+    # calceq1*=np.exp((-(-15.82e0-0.0219e0*tmp)*pres
+                     # +0.5e0*(1.13e-3-0.1475e-3*tmp)*pres*pres)/83.131e0/tmp_k)
+    calceq1*=np.exp((-(-25.50e0+0.1271e0*tmp)*pres
+                     +0.5e0*(-3.08e-3+0.0877e-3*tmp)*pres*pres)/83.131e0/tmp_k)
     return calceq1
 
 def calceq2(tmp,sal,dep):
@@ -45,8 +47,10 @@ def calceq2(tmp,sal,dep):
               +(coeff[3]*sal**0.5+coeff[4]*sal)/tmp_k  \
               +coeff[5]*sal**0.5*np.log(tmp_k)
     calceq2=10.**(-calceq2)
-    calceq2*=np.exp((-(-25.50e0+0.1271e0*tmp)*pres
-                     +0.5e0*(-3.08e-3+0.0877e-3*tmp)*pres*pres)/83.131e0/tmp_k)
+    # calceq2*=np.exp((-(-25.50e0+0.1271e0*tmp)*pres
+                     # +0.5e0*(-3.08e-3+0.0877e-3*tmp)*pres*pres)/83.131e0/tmp_k)
+    calceq2*=np.exp((-(-15.82e0-0.0219e0*tmp)*pres
+                     +0.5e0*(1.13e-3-0.1475e-3*tmp)*pres*pres)/83.131e0/tmp_k)
     return calceq2
 
 def calceqcc(tmp,sal,dep):
@@ -398,6 +402,59 @@ def coefs(cai,temp,nz,nspcc,poro,komi,kcci,size,sal,dep):
     co3sat = keqcc/cai
     return dif_dic,dif_alk,dif_o2,kom,kcc,co3sat
     
+def calc_zox(
+    oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  # input
+    ):   
+    """calculation of zox""" 
+    tol = 1e-6
+    zox = 0e0
+    o2_penetrated = True
+    for iz in range(nz):
+        if o2x[iz]<=0e0: 
+            o2_penetrated = False
+            break
+    if o2_penetrated: # oxygen never gets less than 0 
+        zox = ztot # zox is the bottom depth 
+    else: 
+        if iz==0: # calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
+            zox = (z[iz]*o2i*1e-6/1e3 + 0e0*np.abs(o2x[iz]))/(o2i*1e-6/1e3+np.abs(o2x[iz]))
+        elif iz==1:  
+            zox = z[iz-1] - o2x[iz-1]/((o2i*1e-6/1e3 - o2x[iz-1])/(0e0-z[iz-1]))
+        else:     # calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
+            zox = z[iz-1] - o2x[iz-1]/((o2x[iz-2] - o2x[iz-1])/(z[iz-2]-z[iz-1]))
+    # calculation of kom 
+    kom = np.zeros(nz,dtype=np.float64)
+    kom_ox = np.zeros(nz,dtype=np.float64)
+    kom_an = np.zeros(nz,dtype=np.float64)
+    izox = -100 
+    if anoxic: 
+        kom[:] = komi
+        for iz in range(nz):
+            if z[iz]+0.5e0*dz[iz]<=zox: 
+                kom_ox[iz]=komi
+                if iz> izox:  izox = iz
+            elif z[iz]+0.5e0*dz[iz]>zox and z[iz]-0.5e0*dz[iz]< zox: 
+                kom_ox[iz]=komi* (1e0- ( (z[iz]+0.5e0*dz[iz]) - zox)/dz[iz])
+                kom_an[iz]=komi* (( (z[iz]+0.5e0*dz[iz]) - zox)/dz[iz])
+                if iz> izox: izox = iz
+            elif z[iz]-0.5e0*dz[iz]>=zox: 
+                kom_an[iz]=komi
+        if not (abs(kom_ox[:]+kom_an[:]-kom[:])/komi<tol).all(): 
+            print 'error: calc kom',kom_ox,kom_an,kom
+            input()
+    else:
+        for iz in range(nz):
+            if z[iz]+0.5e0*dz[iz]<=zox: 
+                kom_ox[iz]=komi
+                if iz> izox: izox = iz
+            elif z[iz]+0.5e0*dz[iz]>zox and z[iz]-0.5e0*dz[iz]< zox: 
+                kom_ox[iz]=komi* (1e0- ( (z[iz]+0.5e0*dz[iz]) - zox)/dz[iz])
+                if iz> izox :izox = iz
+            elif z(iz)-0.5e0*dz[iz]>=zox :
+                continue
+        kom[:] = kom_ox[:]
+    return izox,kom,zox,kom_ox,kom_an
+    
 def omcalc( 
     kom,omx     # in&output
     ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof,o2th,komi  # input 
@@ -543,18 +600,21 @@ def calcflxom(
                 if trans[iiz,iz,0]==0e0: continue
                 omdif = omdif -trans[iiz,iz,0]/dz[iz]*dz[iz]*omx[iiz]  # check previous versions 
     omres = omadv + omdec + omdif + omrain + omtflx # this is residual flux should be zero equations are exactly satisfied 
+    flg_restart = False
     if any(omx<0e0):   # if negative om conc. is detected, need to stop  
         print 'negative om, stop'
         file_tmp=open(workdir+'NEGATIVE_OM.txt','w')
         for  iz in range(nz):
             print >> file_tmp, z[iz],omx[iz]*mom/rho[iz]*100e0,w[iz],up[iz],dwn[iz],cnr[iz],adf[iz]
         file_tmp.close()
-        input()
+        flg_restart = True
+        # input()
     if any(np.isnan(omx)) :  # if NAN, ... the same ... stop
         print 'nan om, stop'
         print omx
-        input()
-    return omadv,omdec,omdif,omrain,omres,omtflx
+        flg_restart = True
+        # input()
+    return omadv,omdec,omdif,omrain,omres,omtflx,flg_restart
 
 def o2calc_ox(  
     izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
@@ -1822,7 +1882,7 @@ def main():
     ox2om = np.float64(1.3)         # o2/om mole ratio consumed upon oxic degradation of om 
     d2yr = np.float64(365.25)       # days/year 
     kcci = np.float64(1.*d2yr)      # ref. caco3 dissoltion rate const. [yr-1]
-    komi = np.float64(0.5)          # ref. om degradation rate const. [yr-1]
+    komi = np.float64(0.06)         # ref. om degradation rate const. [yr-1]
     ncc = np.float64(4.5)           # reaction order wrt caco3 dissolution 
     fact = np.float64(1e-3)         # arbitrary factor to facilitate calculation 
     temp = np.float64(2.)           # temperature [C]
@@ -1851,7 +1911,7 @@ def main():
     showiter = False                # show each iteration 
     sparse = True                   # use sparse matrix solver for co2 system
     # switches for mixing 
-    allturbo2 = True                # all turbo2-like mixing
+    allturbo2 = False                # all turbo2-like mixing
     alllabs = False                 # all labs mixing
     allnobio = False                # no bioturbation for all solid species 
     # switches for co2 chemistry 
@@ -1859,7 +1919,7 @@ def main():
     # co2chem = 'co2h2o'              # dic = co2+hco3+co3; alk = hco3+2*co3+oh-h
     # working directory 
     workdir = 'C:/Users/YK/Desktop/Sed_res'
-    filename = '-test-50kyr-5km' 
+    filename = '-50kyr-dis5_0' 
     # ===========  checking something 
     # chk_caco3_therm()
     # chk_caco3_therm_sbrtns()
@@ -1953,7 +2013,7 @@ def main():
         rectime[itrec]=rectime[nrec/3*2-1]+(itrec-nrec/3*2+1)*time_aft/float(nrec/3.)
     cntrec=0
     np.savetxt(workdir+'rectime.txt',rectime)
-    depi = 4.
+    depi = 3.5
     depf = dep
     flxfini = 0.5
     flxfinf = 0.9
@@ -2061,7 +2121,7 @@ def main():
     it=1
     flg_restart = False
     nt_spn=800;nt_trs=5000;nt_aft=1000
-    while True:
+    while True: # time loop 
         if not sense:
             dt = timestep(time,time_spn,time_trs,time_aft
                 ,nt_spn,nt_trs,nt_aft
@@ -2108,7 +2168,7 @@ def main():
         err_fx = 0.
         w_pre[:]=w[:].copy()
         #  here should be a reference point for iteration of w
-        while True:
+        while True:  # burial loop 
             print 'it :',it,dt
             dw = np.zeros(nz,dtype=np.float64)
 ##            oxco2[:]=0.
@@ -2118,66 +2178,78 @@ def main():
             minerr = 1e4
             izox = nz
             # om & o2 iteration wrt zox
-            while error>tol:
+            while error>tol:  # om & o2 loop 
+                izox,kom,zox,kom_ox,kom_an = calc_zox( 
+                    oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  # input
+                    )
                 omx,izox,kom = omcalc( 
                     kom,omx     # in&output
                     ,oxic,anoxic,o2x,om,nz,sporo,sporoi,sporof,o2th,komi  # input 
                     ,w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz  # input 
                     ) 
-                omadv,omdec,omdif,omrain,omres,omtflx = calcflxom(  
+                omadv,omdec,omdif,omrain,omres,omtflx,flg_restart = calcflxom(  
                     sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc,omflx  # input 
                     )
+                if flg_restart:
+                    dt = dt/10e0
+                    w[:]=w_pre[:]
+                    up,dwn,cnr,adf = calcupwindscheme(w,nz)
+                    print 'must restart after om calc'
+                    break
+                    print 'stop'
                 #~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                 # reset matrices 
-                if izox == nz -1 : # fully oxic; lower boundary condition ---> no diffusive out flow 
-                    o2x = o2calc_ox(  
-                        izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
-                        )
-                    #  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
-                    o2dec,o2dif,o2tflx,o2res = calcflxo2_ox( 
-                        nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,ox2om,o2i  # input
-                        )
-                else:  ## if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
+                # if izox == nz -1 : # fully oxic; lower boundary condition ---> no diffusive out flow 
+                o2x = o2calc_ox(  
+                    izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                    )
+                #  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+                o2dec,o2dif,o2tflx,o2res = calcflxo2_ox( 
+                    nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,ox2om,o2i  # input
+                    )
+                if (o2x[:]>=0e0).all() and izox==nz-1: 
+                    iizox_errmin = nz-1
+                elif any(o2x[:]<0e0): 
+                    error_o2min = 1e4
+                    iizox_errmin = izox
+                    for iizox in range(nz):   ## if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
+                        o2x = o2calc_sbox(  
+                            iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                            )
+                        if (o2x[:]>=0e0).all():
+                            if np.abs(o2x[max(iizox-1,0)])<error_o2min: 
+                                error_o2min = np.abs(o2x[max(iizox-1,0)])
+                                iizox_errmin = iizox
                     o2x = o2calc_sbox(  
-                        izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                        iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
                         )
                     o2dec,o2dif,o2tflx,o2res = calcflxo2_sbox( 
-                        nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox,ox2om,o2i  # input
+                        nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,iizox_errmin,ox2om,o2i  # input
                         )
-                # update of zox 
-                zoxx = 0e0
-                for iz in range(nz):
-                    if o2x[iz]<=0e0: break
-                if iz==nz-1: # oxygen never gets less than 0 
-                    zoxx = ztot # zox is the bottom depth 
-                elif iz==0: # calculating zox interpolating at z=0 with SWI conc. and at z=z[iz] with conc. o2x[iz]
-                    zoxx = (z[iz]*o2i*1e-6/1e3 + 0e0*abs(o2x[iz]))/(o2i*1e-6/1e3+abs(o2x[iz]))
-                else :    # calculating zox interpolating at z=z[iz-1] with o2x[iz-1] and at z=z[iz] with conc. o2x[iz]
-                    zoxx = (z[iz]*o2x[iz-1] + z[iz-1]*abs(o2x[iz]))/(o2x[iz-1]+abs(o2x[iz]))
-                error = abs((zox -zoxx)/zox)  # relative difference 
+                    iizox_errmin2,kom_dum,zox,kom_ox_dum,kom_an_dum = calc_zox( 
+                        oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  # input
+                        )
+                    if iizox_errmin!=iizox_errmin: 
+                        print 'error in zox_calc: pause'
+                        input()
+                error = abs(izox-iizox_errmin)  #  difference 
                 if showiter: 
-                    print  'zox',itr,zox, zoxx, error
-                if zox==zoxx: break 
-                zox = 0.5e0*(zox + zoxx)  # new zox 
-                # if iteration reaches 100 error in zox is tested assuming individual grid depths as zox and find where error gets minimized 
-                if itr>=100 and itr <= nz+99:
-                    zox = z[itr-100] # zox value in next test 
-                    if minerr >=error : # if this time error is less than last adopt as optimum 
-                        if itr!=100: 
-                            izox_minerr = itr -101
-                            minerr = error 
-                elif itr ==nz+100: # check last test z(nz)
-                    if minerr >=error: 
-                        izox_minerr = itr -101
-                        minerr = error 
-                    zox = z(izox_minerr)  # determine next test which should be most optimum 
-                elif itr ==nz+101:  # results should be optimum and thus exit 
-                    break
-                if itr >nz+101: 
-                    print 'should not come here'
-                    input()
+                    print  'zox',itr,izox, iizox_errmin
+                if izox==iizox_errmin: break 
+                if error < minerr :  
+                    minerr = error 
+                else: 
+                    if izox < nz and iizox_errmin == nz-1:  
+                        o2x = o2calc_sbox(  
+                            izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                            )
+                        o2dec,o2dif,o2tflx,o2res = calcflxo2_sbox( 
+                            nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,izox,ox2om,o2i  # input
+                            )
+                        break
                 itr = itr + 1
             #~~  O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            if flg_restart:continue 
             for iz in range(nz):
                 if o2x[iz] > o2th:
                     oxco2[iz] = (1e0-poro[iz])*kom[iz]*omx[iz]  # aerobic respiration 
