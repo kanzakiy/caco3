@@ -255,6 +255,8 @@ do   ! <<<----------------------------------------------------------------------
         
     dw = 0d0 ! change in burial rate caused by reaction and non-local mixing 
     
+    oxco2 = 0d0 ! oxic degradation of om 
+    anco2 = 0d0 ! anoxic degradation of om 
     itr = 0  ! iteration number for om and o2 calcuation 
     error = 1d4 ! error in ieration for zox 
     minerr= 1d4  ! recording minimum relative difference in zox from previously considered zox 
