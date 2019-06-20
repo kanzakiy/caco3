@@ -1,24 +1,7 @@
 
 !**************************************************************************************************************************************
 subroutine caco3() 
-! trying a simple diagenesis
-! irregular grid
-! separate into subroutines
-!====================================
-! cpp options (see also defines.h)
-! sense     :  not doing any signal change experiments, used for lysocline and CaCO3 burial calculations 
-! biotest   :  examining different styles of biotubation 
-! track2    :  tracking signals with multipe CaCO3 species at different time steps
-! size      :  two types of CaCO3 species with different sizes 
-! nonrec    :  not storing the profile files but only CaCO3 conc. and burial flux at the end of simulation 
-! nondisp   :  not displaying the results 
-! showiter  :  showing each iteration on display 
-! sparse    :  use sparse matrix solver for caco3 and co2 system 
-! recgrid   :  recording the grid to be used for making transition matrix in LABS 
-! allnobio  :  assuming no bioturbation for all caco3 species 
-! allturbo2 :  assuming homogeneous bio-mixing for all caco3 species
-! alllabs   :  assuming non-local mixing from LABS for all caco3 species
-! ===================================
+! a signal tracking diagenesis
 implicit none 
 
 #include <defines.h>
@@ -89,8 +72,10 @@ real(kind=8) :: detflx = 180d-6 ! g cm-2 yr-1  ! a reference detrital flux; MUDS
 real(kind=8) :: alki =  2285d0 ! uM  ! a reference ALK; MUDS
 real(kind=8) :: dici = 2211d0 ! uM   ! a reference DIC; MUDS 
 #else 
-real(kind=8) :: alki =  2295d0 ! uM  ! a reference ALK from mocsy
-real(kind=8) :: dici = 2154d0 ! uM   ! a reference DIC from mocsy 
+! real(kind=8) :: alki =  2295d0 ! uM  ! a reference ALK from mocsy
+! real(kind=8) :: dici = 2154d0 ! uM   ! a reference DIC from mocsy 
+real(kind=8) :: alki =  2285d0 ! uM  ! a reference ALK; MUDS
+real(kind=8) :: dici = 2211d0 ! uM   ! a reference DIC; MUDS 
 #endif 
 real(kind=8) :: o2i = 165d0 ! uM     ! a reference O2 ; MUDS
 ! real(kind=8) :: komi = 2d0  ! /yr  ! a reference om degradation rate const.; MUDS 
@@ -171,7 +156,7 @@ real(kind=8),allocatable :: amx(:,:),ymx(:),emx(:) ! amx and ymx correspond to A
 integer(kind=4),allocatable :: ipiv(:),dumx(:,:) ! matrix used to solve linear system Ax = B 
 integer(kind=4) infobls, infosbr  ! variables used to tell errors when calling a subroutine to solve matrix 
 real(kind=8) error, error2, minerr  !  errors in iterations and minimum error produced 
-real(kind=8) :: tol = 1d-12  ! tolerance of error 
+real(kind=8) :: tol = 1d-6  ! tolerance of error 
 integer(kind=4) iz, row, col, itr  , it, iiz, itr_w, itr_f ! integers for sediment grid, matrix row and col and iteration numbers 
 integer(kind=4) cntsp  ! counting caco3 species numbers 
 integer(kind=4) izrec, izrec2  ! grid number where signal is read 
@@ -195,7 +180,8 @@ real(kind=8) :: pttflx, ptdif, ptadv, ptres, ptrain  ! clay fluxes
 real(kind=8) :: trans(nz,nz,nspcc+2)  ! transition matrix 
 real(kind=8) :: transdbio(nz,nz), translabs(nz,nz) ! transition matrices created assuming Fickian mixing and LABS simulation
 real(kind=8) :: transturbo2(nz,nz), translabs_tmp(nz,nz) ! transition matrices assuming random mixing and LABS simulation 
-character*255 workdir, filechr  ! work directory and created file names 
+character*512 workdir  ! work directory and created file names 
+character*255 filechr  ! work directory and created file names 
 character*25 dumchr(3)  ! character dummy variables 
 character*25 arg, chr(3,4)  ! used for reading variables and dummy variables
 integer(kind=4) dumint(8)  ! dummy integer 
@@ -218,6 +204,7 @@ integer(kind=4) iizox, iizox_errmin, w_save(nz)
 integer(kind=4) :: itr_w_max = 20
 real(kind=8) :: kom_ox(nz),kom_an(nz),kom_dum(nz,3)
 logical :: warmup_done = .false.
+logical :: all_oxic
 
 #ifdef allnobio 
 nobio = .true.
@@ -230,6 +217,8 @@ labs = .true.
 #ifdef oxonly
 anoxic = .false. 
 #endif
+
+flg_500 = .false.
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)  ! get date and time in character 
 
@@ -261,6 +250,22 @@ call flxstat(  &
     omflx,detflx,ccflx  & ! output
     ,om2cc,ccflxi,mcc,nspcc  & ! input 
     )
+    
+    
+!!!!!!!!! specific boundary conditions if needed
+
+! o2i =  162.35434104144247
+! dici = 2298.6964696813252
+! alki = 2429.3198745074496
+! dep =  5.0000000000000000 
+! sal =  34.957461001340832
+! temp =  1.3566180092130367
+! ccflxi = 7.6549260517794933E-005
+! omflx =  5.8994023885595817E-005
+! detflx = 3.3969233213725432E-003
+! ccflx = ccflxi/nspcc
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! calculate molar volume (cm3/mol) = molar mass (g/mol) / density (g/cm3)
 #ifdef isotrack
@@ -307,6 +312,12 @@ call recordtime(  &
     rectime,time_spn,time_trs,time_aft,cntrec  &
     ,ztot,wi,file_tmp,workdir,nrec  &
     )
+    
+! rectime(1) = 1000d0
+! rectime(2) = 10000d0
+! rectime(3) = 100000d0
+! rectime(4) = 1000000d0
+! rectime(5) = 10000000d0
 
 ! depi = 4d0  ! depth before event 
 depi = 3.5d0  ! depth before event 
@@ -340,6 +351,7 @@ call make_transmx(  &
 call coefs(  &
     dif_dic,dif_alk,dif_o2,kom,kcc,co3sat,krad & ! output 
     ,temp,sal,dep,nz,nspcc,poro,cai,komi,kcci,k14ci,i14c  & !  input 
+    ,i13c18o  &
     )
 
 !!   INITIAL CONDITIONS !!!!!!!!!!!!!!!!!!! 
@@ -408,26 +420,27 @@ do
 
     !! ///////// isotopes & fluxes settings ////////////// 
 #ifndef sense    
-    nt_spn = 800
-    if (.not.warmup_done) then 
-        if (it<11) then 
-            nt_spn = 80000
-        elseif (it<21) then
-            nt_spn = 8000
-        else 
-            warmup_done = .true.
-            time = 0d0
-            it = 1
-            cycle
-        endif 
-    endif 
+    nt_spn =400
+    ! if (.not.warmup_done) then 
+        ! if (it<11) then 
+            ! nt_spn = 80000
+        ! elseif (it<21) then
+            ! nt_spn = 8000
+        ! else 
+            ! warmup_done = .true.
+            ! time = 0d0
+            ! it = 1
+            ! cycle
+        ! endif 
+    ! endif 
     nt_trs = 5000
     nt_aft = 1000
+    700 continue
     call timestep(time,nt_spn,nt_trs,nt_aft,dt,time_spn,time_trs,time_aft)
     call signal_flx(  &
         d13c_ocn,d18o_ocn,ccflx,d18o_sp,d13c_sp,cntsp  &
         ,time,time_spn,time_trs,time_aft,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf,nspcc,ccflxi,it,flxfini,flxfinf  &
-        ,r14ci,capd47_ocni,capd47_ocnf,capd47_ocn,r13c_pdb,r18o_pdb,r17o_pdb,tol  &
+        ,r14ci,capd47_ocni,capd47_ocnf,capd47_ocn,r13c_pdb,r18o_pdb,r17o_pdb,tol,nt_trs  &
         ) 
     call bdcnd(   &
         time,dep,time_spn,time_trs,time_aft,depi,depf  &
@@ -456,19 +469,25 @@ do
     call coefs(  &
         dif_dic,dif_alk,dif_o2,kom,kcc,co3sat,krad & ! output 
         ,temp,sal,dep,nz,nspcc,poro,cai,komi,kcci,k14ci,i14c  & !  input 
+        ,i13c18o  &
         )
     !! /////////////////////
 
 #ifndef nonrec 
     if (it==1) then    !! recording boundary conditions 
-        write(file_bound,*) '#time  d13c_ocn  d18o_ocn, D47, fluxes of cc:',(isp,isp=1,nspcc),'temp  dep  sal  dici  alki  o2i'
+        if (.not. flg_500) then 
+            write(file_bound,*) '#time  d13c_ocn  d18o_ocn, D47, fluxes of cc:',(isp,isp=1,nspcc) & 
+                ,'temp  dep  sal  dici  alki  o2i'
+        endif 
     endif 
 #ifndef size 
     !  recording fluxes of two types of caco3 separately 
-    write(file_bound,*) time, d13c_ocn, d18o_ocn, capd47_ocn,(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+    if (.not. flg_500) write(file_bound,*) time, d13c_ocn, d18o_ocn, capd47_ocn,(ccflx(isp),isp=1,nspcc)  &
+        ,temp, dep, sal,dici,alki, o2i
 #else 
     !  do not record separately 
-    write(file_bound,*) time, d13c_ocn, d18o_ocn, capd47_ocn,sum(ccflx(1:4)),sum(ccflx(5:8)),(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
+    if (.not. flg_500) write(file_bound,*) time, d13c_ocn, d18o_ocn, capd47_ocn,sum(ccflx(1:4)),sum(ccflx(5:8)) &
+        ,(ccflx(isp),isp=1,nspcc),temp, dep, sal,dici,alki, o2i
 #endif 
 #endif 
 
@@ -529,7 +548,18 @@ do
             ,sporo,om,omx,dt_om_o2,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom  &
             ,trans,kom,sporof,sporoi,wi,nspcc,omflx  & ! input 
             ,file_tmp,workdir &
+            ,flg_500  &
             )
+        if (flg_500) then 
+            dt = dt/10d0
+            w = w_save  
+            call calcupwindscheme(  &
+                up,dwn,cnr,adf & ! output 
+                ,w,nz   & ! input &
+                )            
+            go to 300
+        endif
+        
         !~~~~~~~~~~~~~~~~~ O2 calculation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         ! if (izox == nz) then ! fully oxic; lower boundary condition ---> no diffusive out flow  
@@ -563,8 +593,10 @@ do
         ! if (all(o2x>=0d0)) then 
         if (all(o2x>=0d0).and.izox==nz) then 
             iizox_errmin = nz
-            ! print *,'all oxic',iizox_errmin 
+            ! print *,'all oxic',iizox_errmin
+            all_oxic = .true.
         elseif (any(o2x<0d0)) then 
+            all_oxic = .false.
             error_o2min = 1d4
             iizox_errmin = izox
             do iizox = 1,nz   
@@ -574,6 +606,7 @@ do
                     o2x  & ! output
                     ,iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
                     )
+                ! print'(A,I0,10E11.3)', 'o2 :',iizox,(o2x(iz)*1d3,iz=1,nz,nz/10)
                 ! fluxes relevant to oxygen 
                 ! call calcflxo2_sbox( &
                     ! o2dec,o2dif,o2tflx,o2res  & ! output 
@@ -587,11 +620,12 @@ do
                     endif 
                 endif 
             enddo 
-            
+            ! print*,iizox_errmin 
             call o2calc_sbox(  &
                 o2x  & ! output
                 ,iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
                 )
+            ! print'(A,I0,10E11.3)', 'o2 :',iizox_errmin,(o2x(iz)*1d3,iz=1,nz,nz/10)
             ! fluxes relevant to oxygen 
             call calcflxo2_sbox( &
                 o2dec,o2dif,o2tflx,o2res  & ! output 
@@ -613,7 +647,7 @@ do
                 iizox_errmin,kom_dum(:,1),zox,kom_dum(:,2),kom_dum(:,3)   &  ! output 
                 ,oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  & ! input
                 )
-            
+            ! print*,iizox_errmin             
         endif
 
         ! update of zox 
@@ -661,7 +695,23 @@ do
         ! if (itr >nz+101) then 
             ! stop
         ! endif
-        if (izox==iizox_errmin) exit 
+        if (izox==iizox_errmin) then 
+            if (all_oxic) then            
+                exit 
+            else 
+                call o2calc_sbox(  &
+                    o2x  & ! output
+                    ,izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                    )
+                ! print'(A,I0,10E11.3)', 'o2 :',izox,(o2x(iz)*1d3,iz=1,nz,nz/10)
+                ! fluxes relevant to oxygen 
+                call calcflxo2_sbox( &
+                    o2dec,o2dif,o2tflx,o2res  & ! output 
+                    ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
+                    )       
+                exit 
+            endif  
+        endif 
         
         if (error < minerr ) then 
             minerr = error 
@@ -672,6 +722,7 @@ do
                     o2x  & ! output
                     ,izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
                     )
+                ! print'(A,I0,10E11.3)', 'o2 :',izox,(o2x(iz)*1d3,iz=1,nz,nz/10)
                 ! fluxes relevant to oxygen 
                 call calcflxo2_sbox( &
                     o2dec,o2dif,o2tflx,o2res  & ! output 
@@ -686,6 +737,7 @@ do
 
     enddo 
 
+    ! print'(A,I0,10E11.3)', 'o2 :',izox,(o2x(iz)*1d3,iz=1,nz,nz/10)
     !~~  OM & O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     ! do iz = 1,nz 
@@ -734,7 +786,6 @@ do
         )
     if (flg_500) then 
         dt = dt/10d0
-#ifdef sense
         ! go to 500
         ccx = cc
         alkx = alk
@@ -744,7 +795,10 @@ do
             up,dwn,cnr,adf & ! output 
             ,w,nz   & ! input &
             )
+#ifdef sense
         go to 600
+#else 
+        go to 700
 #endif 
     endif 
     ! ~~~~  End of calculation iteration for CO2 species ~~~~~~~~~~~~~~~~~~~~
@@ -1178,7 +1232,7 @@ integer(kind=4),intent(in)::file_ptflx,file_ccflx,file_omflx,file_o2flx,file_dic
 integer(kind=4),intent(in)::file_bound,file_totfrac,file_sigmly,file_sigmlyd,file_sigbtm
 integer(kind=4),intent(inout)::file_ccflxes(nspcc)
 real(kind=8),intent(in)::ccflxi,dep,om2cc
-character*255,intent(inout)::workdir
+character*512,intent(inout)::workdir
 character*255,intent(in)::filechr
 logical,intent(in)::anoxic
 logical,dimension(nspcc+2),intent(in)::labs,turbo2,nobio
@@ -1572,6 +1626,7 @@ endif
 zml=zml_ref ! mixed layer depth assumed to be a reference value at first 
 
 zrec = 1.1d0*maxval(zml)  ! depth where recording is made, aimed at slightly below the bottom of mixed layer  
+! zrec = maxval(zml)  ! depth where recording is made, aimed at slightly below the bottom of mixed layer  
 zrec2 = 2.0d0*maxval(zml)  ! depth where recording is made ver. 2, aimed at 2 time bottom depth of mixed layer 
 
 #ifdef size 
@@ -1581,12 +1636,16 @@ zml(2+3)=20d0
 zml(2+4)=20d0 
 zrec = 1.1d0*minval(zml)  ! first recording is made below minimum depth of mixed layer 
 zrec2 = 1.1d0*maxval(zml) ! second recording is made below maximum depth of mixed layer
+! zrec = minval(zml)  ! first recording is made below minimum depth of mixed layer 
+! zrec2 = maxval(zml) ! second recording is made below maximum depth of mixed layer
 #endif 
 
 do iz=1,nz ! determine grid locations where signal recording is made 
     if (z(iz)<=zrec) izrec = iz  
     if (z(iz)<=zrec2) izrec2 = iz
 enddo
+! izrec = min(nz,izrec+1)
+! izrec2 = min(nz,izrec2+1)
 
 nonlocal = .false. ! initial assumption 
 do isp=1,nspcc+2
@@ -1648,7 +1707,8 @@ endsubroutine make_transmx
 !**************************************************************************************************************************************
 subroutine coefs(  &
     dif_dic,dif_alk,dif_o2,kom,kcc,co3sat,krad & ! output 
-    ,temp,sal,dep,nz,nspcc,poro,cai,komi,kcci,k14ci,i14c  & !  input 
+    ,temp,sal,dep,nz,nspcc,poro,cai,komi,kcci,k14ci,i14c  & !  input
+    ,i13c18o  &
     )
 integer(kind=4),intent(in)::nz,nspcc
 real(kind=8),intent(in)::temp,sal,dep,poro(nz),cai,komi,kcci,k14ci
@@ -1671,6 +1731,9 @@ kcc = kcci
 krad = 0d0
 #ifdef isotrack
 krad(:,i14c) = k14ci 
+#ifdef kie 
+kcc(:,i13c18o) = kcci*(1d0-5d-5) 
+#endif 
 #endif 
 
 #ifdef size 
@@ -1811,10 +1874,10 @@ endsubroutine recordprofile
 subroutine signal_flx(  &
     d13c_ocn,d18o_ocn,ccflx,d18o_sp,d13c_sp,cntsp  &
     ,time,time_spn,time_trs,time_aft,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf,nspcc,ccflxi,it,flxfini,flxfinf  &
-    ,r14ci,capd47_ocni,capd47_ocnf,capd47_ocn,r13c_pdb,r18o_pdb,r17o_pdb,tol   &
+    ,r14ci,capd47_ocni,capd47_ocnf,capd47_ocn,r13c_pdb,r18o_pdb,r17o_pdb,tol,nt_trs   &
     ) 
 implicit none 
-integer(kind=4),intent(in)::nspcc,it
+integer(kind=4),intent(in)::nspcc,it,nt_trs
 integer(kind=4),intent(inout)::cntsp
 real(kind=8),intent(in)::time,time_spn,time_trs,time_aft,d13c_ocni,d13c_ocnf,d18o_ocni,d18o_ocnf,ccflxi
 real(kind=8),intent(in)::flxfini,flxfinf
@@ -1918,10 +1981,10 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then ! during event
     enddo 
 #ifdef track2    
     ! tracking as time goes 
-    ! assignment of new caco3 species is conducted so that nspcc species is used up within 5000 interations
+    ! assignment of new caco3 species is conducted so that nspcc species is used up within nt_trs interations
     ! timing of new species assignment can change at different time period during the event 
     if (time-time_spn<=time_trs/10d0) then
-        if (mod(it,int(5000/(nspcc-2)))==0) then   
+        if (mod(it,int(nt_trs/(nspcc-2)))==0) then   
             cntsp=cntsp+1 ! new species assinged 
             d18o_sp(cntsp)=d18o_ocn
             d13c_sp(cntsp)=d13c_ocn
@@ -1929,7 +1992,7 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then ! during event
             ccflx(cntsp) = ccflxi
         endif 
     elseif (time-time_spn>time_trs/10d0 .and. time-time_spn<=time_trs/10d0*9d0) then
-        if (mod(it,int(5000/(nspcc-2)))==0) then  
+        if (mod(it,int(nt_trs/(nspcc-2)))==0) then  
             cntsp=cntsp+1
             d18o_sp(cntsp)=d18o_ocn
             d13c_sp(cntsp)=d13c_ocn
@@ -1937,7 +2000,7 @@ elseif (time>time_spn .and. time<=time_spn+time_trs) then ! during event
             ccflx(cntsp) = ccflxi
         endif 
     elseif  (time-time_spn>time_trs/10d0*9d0) then 
-        if (mod(it,int(5000/(nspcc-2)))==0) then  
+        if (mod(it,int(nt_trs/(nspcc-2)))==0) then  
             cntsp=cntsp+1
             d18o_sp(cntsp)=d18o_ocn
             d13c_sp(cntsp)=d13c_ocn
@@ -2357,6 +2420,7 @@ subroutine calcflxom(  &
     omadv,omdec,omdif,omrain,omres,omtflx  & ! output 
     ,sporo,om,omx,dt,w,dz,z,nz,turbo2,labs,nonlocal,poro,up,dwn,cnr,adf,rho,mom,trans,kom,sporof,sporoi,wi,nspcc,omflx  & ! input 
     ,file_tmp,workdir &
+    ,flg_500  &
     )
 implicit none 
 integer(kind=4),intent(in)::nz,nspcc,file_tmp
@@ -2365,6 +2429,7 @@ real(kind=8),intent(in)::dt,mom,trans(nz,nz,nspcc+2),sporof,sporoi,wi
 real(kind=8),intent(out)::omadv,omdec,omdif,omrain,omflx,omres,omtflx
 logical,dimension(nspcc+2),intent(in)::turbo2,labs,nonlocal
 character*255,intent(in)::workdir
+logical,intent(out)::flg_500
 integer(kind=4) :: iz,row,iiz,col,isp,nsp=1
 
 omadv = 0d0
@@ -2410,6 +2475,7 @@ enddo
 
 omres = omadv + omdec + omdif + omrain + omtflx ! this is residual flux should be zero equations are exactly satisfied 
 
+flg_500 = .false.
 if (any(omx<0d0)) then  ! if negative om conc. is detected, need to stop  
     print*,'negative om, stop'
     open(unit=file_tmp,file=trim(adjustl(workdir))//'NEGATIVE_OM.txt',status = 'unknown')
@@ -2417,12 +2483,19 @@ if (any(omx<0d0)) then  ! if negative om conc. is detected, need to stop
         write (file_tmp,*) z(iz),omx(iz)*mom/rho(iz)*100d0,w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
     enddo
     close(file_tmp)
-    stop
+    ! stop
+    flg_500 = .true.
 endif 
 if (any(isnan(omx))) then  ! if NAN, ... the same ... stop
     print*,'nan om, stop'
-    print*,omx
-    stop
+    open(unit=file_tmp,file=trim(adjustl(workdir))//'NAN_OM.txt',status = 'unknown')
+    do iz = 1, nz
+        write (file_tmp,*) z(iz),omx(iz),kom(iz),rho(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
+    enddo
+    close(file_tmp)
+    ! print*,omx
+    ! stop
+    flg_500 = .true.
 endif 
 
 endsubroutine calcflxom
@@ -3170,7 +3243,9 @@ if (any(isnan(ymx))) then
         write (file_tmp,*) ymx(iz)
     enddo
     close(file_tmp)
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif
 #endif 
 
@@ -3299,6 +3374,8 @@ do iz = 1, nz
     if (alkx(iz)<1d-100) ymx(row+nspcc+1) = 0d0
 enddo
 
+if (flg_500) exit 
+
 loc_error = maxval(exp(abs(ymx))) - 1d0
 itr = itr + 1
 #ifdef showiter
@@ -3309,34 +3386,46 @@ print*,'co2 iteration',itr,loc_error,infobls
 if (any(ccx<0d0)) then
     print*,'negative ccx, stop'
     print*,ccx
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif
 if (any(isnan(ccx))) then
-    print*,'nan om, stop'
+    print*,'nan ccx, stop'
     print*,ccx
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif
 
 if (any(dicx<0d0)) then
     print*,'negative dicx, stop'
     print*,dicx
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif 
 if (any(isnan(dicx))) then
     print*,'nan dic, stop'
     print*,dicx
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif 
 
 if (any(alkx<0d0)) then
     print*,'negative alk, stop'
     print*,alkx
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif
 if (any(isnan(alkx))) then
     print*,'nan alk, stop'
     print*,alkx
-    stop
+    ! stop
+    flg_500 = .true.
+    exit 
 endif
 #ifdef sense
 if (itr > iter_max) then 
@@ -4090,7 +4179,7 @@ call system ('mkdir -p '//trim(adjustl(workdir)))
 
 open(unit=file_tmp,file=trim(adjustl(workdir))//'lys_sense_'//    &
     'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
-    //'.txt',action='write',status='unknown',access='append') 
+    //'.res',action='write',status='unknown',access='append') 
 write(file_tmp,*) 1d6*(co3i*1d3-co3sat), sum(ccx(1,:)*mcc(:))/rho(1)*100d0, frt(1)  &
     ,sum(ccx(nz,:)*mcc(:))/rho(nz)*100d0, frt(nz),sum(ccx(izml,:)*mcc(:))/rho(izml)*100d0, frt(izml)  &
     ,dt,it,time 
@@ -4098,7 +4187,7 @@ close(file_tmp)
 
 open(unit=file_tmp,file=trim(adjustl(workdir))//'ccbur_sense_'// &
     'cc-'//trim(adjustl(chr(1,4)))//'_rr-'//trim(adjustl(chr(2,4)))  &
-    //'.txt',action='write',status='unknown',access='append') 
+    //'.res',action='write',status='unknown',access='append') 
 write(file_tmp,*) 1d6*(co3i*1d3-co3sat), 1d6*sum(ccadv),dt,it,time 
 close(file_tmp)
 

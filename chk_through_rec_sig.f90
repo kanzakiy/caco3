@@ -31,6 +31,7 @@ real(kind=8) capd47_ocni,capd47_ocnf
 real(kind=8) capd47_ocn
 real(kind=8) deccc(nz,nspcc)  ! radio-active decay rate of caco3 
 real(kind=8) ccrad(nspcc),alkrad,d17o_blk(nz),d14c_age(nz),capd47(nz)
+logical :: all_oxic  !  XXXXXXXXXXXXXXXXXXXXXXX  NEW ---- June 19 2019 YK added XXXXXXXXXXXXXXXXXXXXXXX
 
 interval =10 ! choose a value between 1 to nz; om depth profile is shown with this interval; e.g., if inteval = nz, om conc. at all depths are shown
 ! e.g., if interval = 5, om conc. at 5 depths are shown   
@@ -50,9 +51,9 @@ anoxic = .false.
 #endif
 
 !********************************************************************************************************************************  ADDED-START
-dep = 5.0d0
-ccflxi = 12d-6
-om2cc = 0.7d0
+dep = 3.5d0
+ccflxi = 60d-6
+om2cc = 1.0d0
 open(unit=file_sigmly,file=trim(adjustl(workdir))//'sigmly.txt',action='write',status='unknown')! recording signals etc at just below mixed layer 
 open(unit=file_sigmlyd,file=trim(adjustl(workdir))//'sigmlyd.txt',action='write',status='unknown') ! recording signals etc at depths of 2x mixed layer thickness 
 open(unit=file_sigbtm,file=trim(adjustl(workdir))//'sigbtm.txt',action='write',status='unknown')! ! recording signals etc at bottom of sediment 
@@ -175,7 +176,7 @@ co3x = co3
 time = 0d0 ! model time [yr]
 it = 1 ! integration count 
 nt = 10 ! total integration 
-dt = 1d2 ! time step [yr]
+dt = 1d3 ! time step [yr]
 
 rho = 2.5d0 ! assume here 
 
@@ -312,7 +313,9 @@ do   ! <<<----------------------------------------------------------------------
         if (all(o2x>=0d0).and.izox==nz) then 
             iizox_errmin = nz
             ! print *,'all oxic',iizox_errmin 
+            all_oxic = .true. !  XXXXXXXXXXXXXXXXXXXXXXX  NEW ---- June 19 2019 YK added XXXXXXXXXXXXXXXXXXXXXXX
         elseif (any(o2x<0d0)) then 
+            all_oxic = .false. !  XXXXXXXXXXXXXXXXXXXXXXX  NEW ---- June 19 2019 YK added XXXXXXXXXXXXXXXXXXXXXXX
             error_o2min = 1d4
             iizox_errmin = izox
             do iizox = 1,nz   
@@ -361,7 +364,26 @@ do   ! <<<----------------------------------------------------------------------
         
         ! print*, 'itr,zox, zoxx, error',itr,zox, zoxx, error
         ! print*,'~~~~~~~~~~~////~~~~~~~~~~~~~'
-        if (izox==iizox_errmin) exit 
+        !  VVVVVVVVVVVVVVVVVVVVVVVVVVV  NEW start ---- June 19 2019 YK added VVVVVVVVVVVVVVVVVVVVVVVVVVV
+        ! if (izox==iizox_errmin) exit 
+        if (izox==iizox_errmin) then 
+            if (all_oxic) then            
+                exit 
+            else 
+                call o2calc_sbox(  &
+                    o2x  & ! output
+                    ,izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                    )
+                ! print'(A,I0,10E11.3)', 'o2 :',izox,(o2x(iz)*1d3,iz=1,nz,nz/10)
+                ! fluxes relevant to oxygen 
+                call calcflxo2_sbox( &
+                    o2dec,o2dif,o2tflx,o2res  & ! output 
+                    ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
+                    )       
+                exit 
+            endif  
+        endif 
+        !  VVVVVVVVVVVVVVVVVVVVVVVVVVV  NEW end ---- June 19 2019 YK added VVVVVVVVVVVVVVVVVVVVVVVVVVV
         
         if (error < minerr ) then 
             minerr = error 
