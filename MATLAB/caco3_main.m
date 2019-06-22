@@ -47,9 +47,9 @@ classdef caco3_main
         
         %% OM degradation
         % komi = 2d0;       % /yr  % a reference om degradation rate const.; MUDS
-        komi = 0.5d0;       % /yr  % arbitrary
+        % komi = 0.5d0;       % /yr  % arbitrary
         % komi = 0.1d0;     % /yr  % Canfield 1994
-        % komi = 0.06d0;    % /yr  % ?? Emerson 1985? who adopted relatively slow decomposition rate
+        komi = 0.06d0;    % /yr  % ?? Emerson 1985? who adopted relatively slow decomposition rate
         
         %% options, compare defines.h
         def_test = false;       % using 'test' directory
@@ -77,9 +77,6 @@ classdef caco3_main
         
         def_recgrid = false;    % recording the grid to be used for making transition matrix in LABS
         
-        %        kcci = 10.0d0*365.25d0      % /yr; a reference caco3 dissolution rate const.
-        kcci = 1d0*365.25d0         % /yr; cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
-        %        kcci = 0d0*365.25d0        % /yr; if def_nodissolve 
     end
     
     properties
@@ -87,9 +84,12 @@ classdef caco3_main
         
         %%
         nspcc = 4;  % default: 4; if def_sense: 12;  if def_track2: 42; if def_size: 8    % number of CaCO3 species
-        ztot=500d0; % if def_sense: 50.0d0;   % cm , total sediment thickness
-        om2cc = 0.666d0;   % rain ratio of organic matter to calcite
-        % om2cc = 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
+        ztot;   %=500d0; % if def_sense: 50.0d0;   % cm , total sediment thickness
+        % om2cc = 0.666d0;   % rain ratio of organic matter to calcite
+        om2cc = 1.5d0;  %0.7d0;      % 1.0d0;      % default 0.7d0;   % for signal tracking exp; rain ratio of organic matter to calcite
+        %        kcci = 10.0d0*365.25d0      % /yr; a reference caco3 dissolution rate const.
+        kcci = 1d0*365.25d0         % /yr; cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
+        %        kcci = 0d0*365.25d0        % /yr; if def_nodissolve 
 
         def_oxonly = false;      % enabling only oxic degradation of om
 
@@ -367,7 +367,7 @@ classdef caco3_main
             
             if (true)   % devided by the time duration when transition matrices are created in LABS and weakening by a factor
                 % if (.false.) then
-                translabs = translabs *365.25d0/10d0*1d0/2.3d0;
+                translabs = translabs *365.25d0/10d0*1d0/3d0;     % was 2.3d0;
                 % translabs = translabs *365.25d0/10d0*1d0/10d0
             end
             %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -428,9 +428,9 @@ classdef caco3_main
                 
                 %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                 % transition matrix for random mixing
-                transturbo2(1:izml,1:izml) = 0.0015d0/1d0;  % arbitrary assumed probability
+                transturbo2(1:izml,1:izml) = 0.0010d0/1d0;  % was 0.0015d0/1d0; arbitrary assumed probability
                 for iz=1:izml  % when i = j, transition matrix contains probabilities with which particles are moved from other layers of sediment
-                    transturbo2(iz,iz)=-0.0015d0*(izml-1)/1d0;
+                    transturbo2(iz,iz)=-0.0010d0*(izml-1)/1d0; % was 0.0015d0/1d0; 
                 end
                 
                 if (turbo2(isp))
@@ -458,11 +458,11 @@ classdef caco3_main
             
         end
         
-        function [omx, izox, kom] = omcalc(oxic,anoxic,o2x,om, komi,nz,sporo,sporoi,sporof, w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz, o2th)
+        function [omx] = omcalc(oxic,anoxic,o2x,om, komi,nz,sporo,sporoi,sporof, w,wi,dt,up,dwn,cnr,adf,trans,nspcc,labs,turbo2,nonlocal,omflx,poro,dz, o2th, kom)
             
             % allocate output arrays
             omx = zeros(1, nz);         %  om conc. mol cm-3 sld;
-            kom = zeros(1, nz);         %  degradation rate consts. for each nz grids
+%            kom = zeros(1, nz);         %  degradation rate consts. for each nz grids
             % izox: integer for grid number of zox
             
             % allocate local array ( down further down)
@@ -489,24 +489,24 @@ classdef caco3_main
             %
             %  Matrices A and B are filled in this way. Note again amx and ymx correspond A and B, respectively.
             
-            izox_calc_done = false;
-            if (oxic)
-                for iz=1:nz
-                    if (o2x(iz) > o2th)
-                        kom(iz) = komi;
-                        % izox = iz
-                        if (~izox_calc_done)
-                            izox = iz;      % set grid number down
-                        end
-                    else% unless anoxi degradation is allowed, om cannot degradate below zox
-                        kom(iz) = 0d0;
-                        if (anoxic)
-                            kom(iz) = komi;
-                        end
-                        izox_calc_done = true;
-                    end
-                end
-            end
+%             izox_calc_done = false;
+%             if (oxic)
+%                 for iz=1:nz
+%                     if (o2x(iz) > o2th)
+%                         kom(iz) = komi;
+%                         % izox = iz
+%                         if (~izox_calc_done)
+%                             izox = iz;      % set grid number down
+%                         end
+%                     else% unless anoxi degradation is allowed, om cannot degradate below zox
+%                         kom(iz) = 0d0;
+%                         if (anoxic)
+%                             kom(iz) = komi;
+%                         end
+%                         izox_calc_done = true;
+%                     end
+%                 end
+%             end
             
             nsp=1;               % number of species considered here; 1, only om
             nmx = nz*nsp;        % # of col (... row) of matrix A to in linear equations Ax = B to be solved, each species has nz (# of grids) unknowns
@@ -777,6 +777,11 @@ classdef caco3_main
             amx = zeros(nmx, nmx);          % amx corresponds to A in Ax = B, but ymx is also x when Ax = B is solved. emx is array of error
             ymx = zeros(1, nmx);            % ymx correspond to B in Ax = B, but ymx is also x when Ax = B is solved
             
+            if (izox == nz) 
+                iz_zero = nz-1;
+            elseif (izox < nz) 
+                iz_zero = izox;
+            end
             
             for iz = 1:nz
                 row = 1 + (iz-1)*nsp;
@@ -791,7 +796,7 @@ classdef caco3_main
                     
                     % filling matrix at grid iz but for unknown at grid iz+1 (only diffusion term)
                     amx(row,row+nsp) = ( - ((poro(iz)*dif_o2(iz)+poro(iz+1)*dif_o2(iz+1))*0.5d0*(1d0)/(0.5d0*(dz(iz)+dz(iz+1))) - 0d0)/dz(iz) );
-                elseif (iz>1 && iz<= izox)
+                elseif (iz>1 && iz<= iz_zero)
                     ymx(row) = ( 0d0 ...
                         + poro(iz)*(0d0-o2(iz))/dt ...    % time change
                         - (0.5d0*(poro(iz+1)*dif_o2(iz+1)+poro(iz)*dif_o2(iz))*(0d0)/(0.5d0*(dz(iz+1)+dz(iz))) ...        % diffusion
@@ -805,7 +810,7 @@ classdef caco3_main
                     amx(row,row+nsp) = ( - (0.5d0*(poro(iz+1)*dif_o2(iz+1)+poro(iz)*dif_o2(iz))*(1d0)/(0.5d0*(dz(iz+1)+dz(iz))) - 0d0)/dz(iz)  );
                     % filling matrix at grid iz but for unknown at grid iz-1 (only diffusion term)
                     amx(row,row-nsp) = ( - (0d0 - 0.5d0*(poro(iz)*dif_o2(iz)+poro(iz-1)*dif_o2(iz-1))*(-1d0)/(0.5d0*(dz(iz)+dz(iz-1))))/dz(iz) );
-                elseif (iz> izox)   % at lower than zox; zero conc. is forced
+                elseif (iz> iz_zero)   % at lower than zox; zero conc. is forced
                     ymx(row) =  0d0;
                     amx(row,row) = 1d0;
                 end
@@ -828,13 +833,19 @@ classdef caco3_main
             o2dif = 0d0;
             o2tflx = 0d0;
             
+         	if (izox == nz) 
+                iz_zero = nz-1;
+            elseif (izox < nz) 
+                iz_zero = izox;
+            end
+
             for iz = 1:nz
                 if (iz == 1)
                     o2dec = o2dec + sporo(iz)*ox2om*kom(iz)*omx(iz)*dz(iz);
                     o2tflx = o2tflx + (o2x(iz)-o2(iz))/dt*dz(iz)*poro(iz);
                     o2dif = o2dif - ((poro(iz)*dif_o2(iz)+poro(iz+1)*dif_o2(iz+1))*0.5d0*(o2x(iz+1)-o2x(iz))/(0.5d0*(dz(iz)+dz(iz+1))) ...
                         - poro(iz)*dif_o2(iz)*(o2x(iz)-o2i*1d-6/1d3)/dz(iz))/dz(iz) *dz(iz);
-                elseif (iz>1 && iz<=izox)
+                elseif (iz>1 && iz<=iz_zero)
                     o2dec = o2dec + (1d0-poro(iz))*ox2om*kom(iz)*omx(iz)/poro(iz)*dz(iz)*poro(iz);
                     o2tflx = o2tflx + (o2x(iz)-o2(iz))/dt*dz(iz)*poro(iz);
                     o2dif = o2dif ...
@@ -1825,7 +1836,7 @@ classdef caco3_main
             
             if (itrec==0)
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_ptx-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ptx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1834,7 +1845,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_ccx-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1845,7 +1856,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_o2x-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_o2x-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
@@ -1854,7 +1865,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_omx-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_omx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
@@ -1863,7 +1874,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx_sp-%3.3i.txt',itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
@@ -1873,7 +1884,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_sig-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_sig-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
@@ -1882,7 +1893,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_bur-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_bur-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
@@ -1892,7 +1903,7 @@ classdef caco3_main
             else
                 
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_ptx-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ptx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1901,7 +1912,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_ccx-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1912,7 +1923,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_o2x-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_o2x-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
@@ -1921,7 +1932,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_omx-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_omx-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
@@ -1930,7 +1941,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx_sp-%3.3i.txt',itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
@@ -1940,7 +1951,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_sig-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_sig-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
@@ -1949,7 +1960,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2305_lysocline/matlab_bur-%3.3i.txt',itrec);
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_bur-%3.3i.txt',itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
@@ -1997,7 +2008,7 @@ classdef caco3_main
             cntrec = 1;  % rec number (increasing with recording done )
             if(~def_nonrec)
                 % open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
-                str = sprintf('./2305_lysocline/matlab_rectime.txt');
+                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_rectime.txt');
                 file_tmp = fopen(str,'wt');
                 for itrec=1:nrec
                     %write(file_tmp,*) rectime(itrec)  % recording when records are made
@@ -2315,6 +2326,80 @@ classdef caco3_main
             end
             
         end
+        
+        function [izox,kom,zox,kom_ox,kom_an] = calc_zox(oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz)
+            %% calculating zox from assumed/previous o2 profiles
+            tol=1d-6;       % tol for accuracy of OM degradation rate constants
+            zox = 0d0;
+            for iz=1:nz
+                if (o2x(iz)<=0d0) 
+                    break   % exit in fortran (terminates while-loop)
+                end
+         	end
+
+            if (iz==nz) % oxygen never gets less than 0 % was nz+1, this caused a problem
+                zox = ztot; % zox is the bottom depth 
+            elseif (iz==1)  % calculating zox interpolating at z=0 with SWI conc. and at z=z(iz) with conc. o2x(iz)
+                zox = (z(iz)*o2i*1d-6/1d3 + 0d0*abs(o2x(iz)))/(o2i*1d-6/1d3+abs(o2x(iz)));
+            elseif (iz==2)  
+                zox = z(iz-1) - o2x(iz-1)/((o2i*1d-6/1d3 - o2x(iz-1))/(0d0-z(iz-1)));
+            else     % calculating zox interpolating at z=z(iz-1) with o2x(iz-1) and at z=z(iz) with conc. o2x(iz)
+                % zox = (z(iz)*o2x(iz-1) + z(iz-1)*abs(o2x(iz)))/(o2x(iz-1)+abs(o2x(iz)))
+                zox = z(iz-1) - o2x(iz-1)/((o2x(iz-2) - o2x(iz-1))/(z(iz-2)-z(iz-1)));
+            end
+
+            % calculation of kom 
+            kom = zeros(1, nz);
+            kom_ox = zeros(1, nz);
+            kom_an = zeros(1, nz);
+            izox = 0; 
+            if(anoxic) 
+                kom = ones(1,nz)*komi;
+                for iz=1:nz
+                    if (z(iz)+0.5d0*dz(iz)<=zox) 
+                        kom_ox(iz)=komi;
+                        if (iz > izox)
+                            izox = iz;
+                        end
+                    elseif (z(iz)+0.5d0*dz(iz)>zox && z(iz)-0.5d0*dz(iz)< zox)  
+                        kom_ox(iz)  =   komi* (1d0- ( (z(iz)+0.5d0*dz(iz)) - zox)/dz(iz));
+                        kom_an(iz)  =   komi* ((      (z(iz)+0.5d0*dz(iz)) - zox)/dz(iz));
+                        if (iz > izox)
+                            izox = iz;
+                        end
+                    elseif (z(iz)-0.5d0*dz(iz)>=zox) 
+                        kom_an(iz)=komi;
+                    end
+                end 
+                if (~all(abs(kom_ox+kom_an-kom)/komi<tol))  % just check that every depth-layer has either oxic OR anoxic OM degradation
+                    msg = 'error in signal_flx, stop';  % should not come here
+                    kom_ox
+                    kom_an
+                    kom
+                    error(msg)
+                    % print*,'error: calc kom',kom_ox,kom_an,kom
+                    % stop
+                end 
+            else
+                for iz=1:nz
+                    if (z(iz)+0.5d0*dz(iz)<=zox) 
+                        kom_ox(iz)=komi;
+                        if (iz> izox ) 
+                            izox = iz;
+                        end
+                    elseif (z(iz)+0.5d0*dz(iz)>zox && z(iz)-0.5d0*dz(iz)< zox) 
+                        kom_ox(iz)=komi* (1d0- ( (z(iz)+0.5d0*dz(iz)) - zox)/dz(iz));
+                        if (iz> izox ) 
+                            izox = iz;
+                        end
+                    elseif (z(iz)-0.5d0*dz(iz)>=zox) 
+                        %   continue
+                    end
+                end 
+                kom = kom_ox;
+            end
+        end
+        
         
     end
     
