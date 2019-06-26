@@ -22,8 +22,7 @@ calceq1=calceq1+coeff(1)*sal**0.5d0+coeff(2)*sal+coeff(3)*sal**2d0 &
     +coeff(6)*sal**0.5d0*log(tmp_k)
 calceq1=10d0**(-calceq1)
 
-! calceq1=calceq1*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d-3+0.0877d-3*tmp)*pres*pres)/83.131d0/tmp_k) ! correct
-calceq1=calceq1*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k) ! wrong 
+calceq1=calceq1*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d-3+0.0877d-3*tmp)*pres*pres)/83.131d0/tmp_k) ! correct
 ! pressure term corrected May 11 2019
 endfunction calceq1
 
@@ -49,8 +48,7 @@ calceq2=calceq2+coeff(1)*sal**0.5d0+coeff(2)*sal+coeff(3)*sal**2d0 &
     +coeff(6)*sal**0.5d0*log(tmp_k)
 calceq2=10d0**(-calceq2)
 
-! calceq2=calceq2*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k)  ! correct
-calceq2=calceq2*exp((-(-25.50d0+0.1271d0*tmp)*pres+0.5d0*(-3.08d-3+0.0877d-3*tmp)*pres*pres)/83.131d0/tmp_k) ! wrong 
+calceq2=calceq2*exp((-(-15.82d0-0.0219d0*tmp)*pres+0.5d0*(1.13d-3-0.1475d-3*tmp)*pres*pres)/83.131d0/tmp_k)  ! correct
 ! pressure term corrected May 11 2019 
 
 endfunction calceq2
