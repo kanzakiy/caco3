@@ -2114,6 +2114,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     it=1
     flg_restart = False
     nt_spn=400;nt_trs=5000;nt_aft=1000
+    dt_save = dt
     while True: # time loop 
         if not sense:
             dt = timestep(time,time_spn,time_trs,time_aft
@@ -2126,6 +2127,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
                 )
             dep = bdcnd(time,time_spn,time_trs,time_aft,depi,biotest,depf)
         else:
+            dt = dt_save
             d13c_ocn = 0. 
             d18o_ocn = 0.
         d13c_flx = np.sum(d13c_sp[:]*ccflx[:])/ccflxi
