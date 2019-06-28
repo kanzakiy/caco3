@@ -450,7 +450,7 @@ def calc_zox(
             elif z[iz]+0.5e0*dz[iz]>zox and z[iz]-0.5e0*dz[iz]< zox: 
                 kom_ox[iz]=komi* (1e0- ( (z[iz]+0.5e0*dz[iz]) - zox)/dz[iz])
                 if iz> izox :izox = iz
-            elif z(iz)-0.5e0*dz[iz]>=zox :
+            elif z[iz]-0.5e0*dz[iz]>=zox :
                 continue
         kom[:] = kom_ox[:]
     return izox,kom,zox,kom_ox,kom_an
