@@ -4,6 +4,7 @@ import os
 crntdir = os.getcwd()
 if not crntdir in sys.path:sys.path.append(crntdir)
 from caco3 import caco3_main
+import numpy as np
 
 ccflxi      = 12e-6      # CaCO3 rain flux in mol cm-2 yr-1  
 om2cc       = 0.7        # OM/CaCO3 rain ratio 
