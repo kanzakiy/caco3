@@ -1528,14 +1528,7 @@ def make_transmx(
     nonlocal = np.zeros(nspcc+2,dtype=bool)
     translabs=np.zeros((nz,nz),dtype=np.float64)
     if any(labs):
-        nlabs = 7394
-        for ilabs in range(nlabs):
-            translabs_tmp=np.loadtxt('C:/Users/YK/Desktop/biot-res/'
-                                     +'trans-test-1kyr-frq-20190315/mix/'
-                                     +'transmtx-'+str((ilabs+1)*2000)
-                                     +'.txt')
-            translabs += translabs_tmp
-        translabs /= float(nlabs)
+        translabs = np.loadtxt('./labs-mtx.txt')
     if True:
         translabs *= 365.25/10.*1./3.
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~
