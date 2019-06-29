@@ -1921,6 +1921,8 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     if sense:nspcc =np.int32(1)
     if size:nspcc = np.int32(8)
     if track2:nspcc = np.int32(42)
+    # use a shallow sediment for sensitivity analysis
+    if sense:ztot = 50.
     # mixing properties 
     nobio = np.zeros(nspcc+2,dtype=bool)
     turbo2 = np.zeros(nspcc+2,dtype=bool)
