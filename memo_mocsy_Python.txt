@@ -1,10 +1,10 @@
 Memo for using mocsy with Python (working with Windows)
 1. Creating mocsy.dll (cf., http://ocmip5.ipsl.jussieu.fr/mocsy/pyth.html)
-	(a) Type 'git clone git://github.com/jamesorr/mocsy.git' to make mocsy directory in your working directory
+    (a) Type 'git clone git://github.com/jamesorr/mocsy.git' to make mocsy directory in your working directory
     (b) Change Makefile in mocsy directory: 
-		'f2py' to 'python -m numpy.f2py'
-		'----fcompiler=g95' to '--fcompiler=gfortran' (unnecessary?)
-	(c) Type 'make mocsy.so' in mocsy directory
+        'f2py' to 'python -m numpy.f2py'
+        '----fcompiler=g95' to '--fcompiler=gfortran' (unnecessary?)
+    (c) Type 'make mocsy.so' in mocsy directory
 2. Move mocsy.dll to your working directory
 3. Run simulations: Type 'python caco3.py'. You will be asked about co2 chemistry calculation method. Enter 'mocsy'.
     Or run sensitivity simulations by typing 'python caco3_sense.py'. 
