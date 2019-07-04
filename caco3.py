@@ -8,6 +8,7 @@ from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 #import scipy.linalg as la
 import scipy.linalg.lapack as lapack
+if os.path.exists('./mocsy.dll'):import mocsy
 
 np.set_printoptions(formatter={'float': '{:.2e}'.format})
 
@@ -288,6 +289,80 @@ def calcdevs(tmp,sal,dep,dic,alk,nz):
     dco3_ddic[:] = 0./(pro[:]/k2+2.) + alk[:]*(-1.)/((pro[:]/k2+2.)**2.)\
                    *(1./k2)*dph_ddic[:]
     return dco3_ddic,dco3_dalk,info
+
+def co2sys_mocsy(nz,alk,dic,tempi,depi,sali):
+    # following is copied and pasted from test_mocsy.py and then modified
+    # Define input data (typical values at depth from 0 to 5000 meters)
+    temp = np.repeat(tempi, nz).astype('float32')
+    depth = np.repeat (depi, nz).astype('float32')
+    sal = np.repeat(sali, nz).astype('float32')
+    sil = phos = np.repeat(0.0, nz).astype('float32')
+    Patm = np.repeat(1.0, nz).astype('float32')
+    # optK1K2 = 'l'
+    optcon  = 'mol/m3'  # input concentrations are in MOL/m3
+    optt    = 'Tinsitu' # input temperature, variable 'temp' is actually IN SITU temp [°C]
+    optp    = 'm'      # input variable 'depth' is in 'DECIBARS'
+    optb    = 'l10'
+    optk1k2 = 'l'
+    optkf   = 'dg'
+    # Create output arrays
+    # --------------------
+    # computed variables at 6 input points
+    lat    = np.zeros((nz,)).astype('float32')
+    ph     = np.zeros((nz,)).astype('float32')
+    pco2   = np.zeros((nz,)).astype('float32')
+    fco2   = np.zeros((nz,)).astype('float32')
+    co2    = np.zeros((nz,)).astype('float32')
+    hco3   = np.zeros((nz,)).astype('float32')
+    co3    = np.zeros((nz,)).astype('float32')
+    OmegaA = np.zeros((nz,)).astype('float32')
+    OmegaC = np.zeros((nz,)).astype('float32')
+    BetaD  = np.zeros((nz,)).astype('float32')
+    rhoSW  = np.zeros((nz,)).astype('float32')
+    p      = np.zeros((nz,)).astype('float32')
+    tempis = np.zeros((nz,)).astype('float32')
+    # values of derivatives w/ respect to 6 input variables and at 6 input points
+    ph_deriv     = np.zeros((6*nz,)).astype('float32')
+    pco2_deriv   = np.zeros((6*nz,)).astype('float32')
+    OmegaA_deriv = np.zeros((6*nz,)).astype('float32')
+    ph_deriv     = ph_deriv.reshape ((6,nz), order='F')
+    pco2_deriv   = pco2_deriv.reshape ((6,nz), order='F')
+    OmegaA_deriv = OmegaA_deriv.reshape ((6,nz), order='F')
+    # Run mocsy.vars()
+    # Notice that option names are all lowercase
+    ph, pco2, fco2, co2, hco3, co3, OmegaA, OmegaC, BetaD, rhoSW, p, tempis = \
+        mocsy.mvars (temp, sal, alk, dic, sil, phos, Patm, depth, lat
+            ,optcon=optcon, optt=optt, optp=optp, optb=optb, optk1k2=optk1k2, optkf=optkf)
+    # print mocsy results
+    # -------------------
+    # print "pH     pCO2   fCO2     CO2*       HCO3-       CO32-      OmegaA OmegaC  R    Density Press  Temperature"
+    # for i in range (0, 3):
+        # print ph[i], pco2[i], fco2[i], co2[i], hco3[i], co3[i], OmegaA[i], OmegaC[i], BetaD[i], rhoSW[i], p[i], tempis[i]
+    # Compute automatic derivatives (using automatic differentiation)
+    ph_deriv, pco2_deriv, fco2_deriv, co2_deriv, hco3_deriv, co3_deriv, OmegaA_deriv, OmegaC_deriv = \
+        mocsy.mderivauto(temp, sal, alk, dic, sil, phos, Patm, depth, lat,                                     # INPUT
+                        optcon=optcon, optt=optt, optp=optp, optb=optb, optk1k2=optk1k2, optkf=optkf)  # INPUT OPTIONS
+    # Compute buffer factors from Egleston
+    # pco2_deriv[2,:] are derivatives of pCO2 w/ respect to DIC
+    # pco2_deriv[1,:] are        ...          w/ respect to Alk
+    gamma_DIC = pco2 / pco2_deriv[1,:]
+    gamma_Alk = pco2 / pco2_deriv[0,:]
+    beta_DIC  = -1. / (np.log(10.) * ph_deriv[1,:])
+    beta_Alk  = -1. / (np.log(10.) * ph_deriv[0,:])
+    # Here, we use Omega of Aragonite (use of Calcite would have been equaly valid)
+    omega_DIC = OmegaA / OmegaA_deriv[1,:]
+    omega_Alk = OmegaA / OmegaA_deriv[0,:]
+    # print ""
+    # print "gamma_DIC     gamma_Alk     beta_DIC     beta_Alk    omega_DIC    omega_Alk"
+    # for i in range (0, 3):
+        # print gamma_DIC[i], gamma_Alk[i], beta_DIC[i], beta_Alk[i], omega_DIC[i], omega_Alk[i]
+    # Print derivatives of pH with respect to phosphate, silicate, temperature and salinity
+    # print ""
+    # print "dpH/dPhos  dpH/dSil  dpH/dT   dpH/dS"
+    # print "pH/µMol     pH/µMol  pH/°C   pH/psu"
+    # for i in range (0, 3):
+        # print ph_deriv[2,i], ph_deriv[3,i], ph_deriv[4,i], ph_deriv[5,i]
+    return co2,hco3,co3,10.**-ph,OmegaC,OmegaC_deriv[1,:],OmegaC_deriv[0,:]
 
 def calcupwindscheme(w,nz):
     # ------------ determine calculation scheme for advection 
@@ -841,47 +916,65 @@ def calccaco3sys(  #
         amx[:,:]=0e0
         ymx=np.zeros(nmx,dtype=np.float64)
         # calling subroutine from caco3_therm.f90 to calculate aqueous co2 species 
-        if co2chem == 'co2':
-            co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
-            # print info
-            # calcspecies(temp,sal,dep,dicx,alkx)
-            if info==1: # which means error in calculation 
-                dt=dt/10e0
-                dicx[:]=dic[:].copy()
-                alkx[:]=alk[:].copy()
-                ccx[:,:]=cc[:,:].copy()
-                w[:]=w_pre[:].copy()
-                # upwind(w)
-                up,dwn,cnr,adf = calcupwindscheme(w,nz)
-                print 'location 1'
-                flg_restart = True 
-                continue
-                print 'stop'
-                input()
-        elif co2chem=='co2h2o':
-            co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dicx,alkx,nz)
-            if info==1: # which means error in calculation 
-                dt=dt/10e0
-                dicx[:]=dic[:].copy()
-                alkx[:]=alk[:].copy()
-                ccx[:,:]=cc[:,:].copy()
-                w[:]=w_pre[:].copy()
-                # upwind(w)
-                up,dwn,cnr,adf = calcupwindscheme(w,nz)
-                print 'location 2'
-                flg_restart = True 
-                continue
-                print 'stop'
-                input()
-        for isp in range(nspcc):
-            # calculation of dissolution rate for individual species 
-            rcc[:,isp] = kcc[:,isp]*ccx[:,isp]*abs(1e0-co3x[:]*1e3/co3sat)**ncc*((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)
-            # calculation of derivatives of dissolution rate wrt conc. of caco3 species, dic and alk 
-            drcc_dcc[:,isp] = kcc[:,isp]*abs(1e0-co3x[:]*1e3/co3sat)**ncc*((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)
-            drcc_dco3[:,isp] = kcc[:,isp]*ccx[:,isp]*ncc*abs(1e0-co3x[:]*1e3/co3sat)**(ncc-1e0)  \
-                *((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)*(-1e3/co3sat)
-            drcc_ddic[:,isp] = drcc_dco3[:,isp]*dco3_ddic[:]
-            drcc_dalk[:,isp] = drcc_dco3[:,isp]*dco3_dalk[:]
+        if co2chem != 'mocsy':
+            if co2chem == 'co2':
+                co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
+                # print info
+                # calcspecies(temp,sal,dep,dicx,alkx)
+                if info==1: # which means error in calculation 
+                    dt=dt/10e0
+                    dicx[:]=dic[:].copy()
+                    alkx[:]=alk[:].copy()
+                    ccx[:,:]=cc[:,:].copy()
+                    w[:]=w_pre[:].copy()
+                    # upwind(w)
+                    up,dwn,cnr,adf = calcupwindscheme(w,nz)
+                    print 'location 1'
+                    flg_restart = True 
+                    continue
+                    print 'stop'
+                    input()
+            elif co2chem=='co2h2o':
+                co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dicx,alkx,nz)
+                if info==1: # which means error in calculation 
+                    dt=dt/10e0
+                    dicx[:]=dic[:].copy()
+                    alkx[:]=alk[:].copy()
+                    ccx[:,:]=cc[:,:].copy()
+                    w[:]=w_pre[:].copy()
+                    # upwind(w)
+                    up,dwn,cnr,adf = calcupwindscheme(w,nz)
+                    print 'location 2'
+                    flg_restart = True 
+                    continue
+                    print 'stop'
+                    input()
+            for isp in range(nspcc):
+                # calculation of dissolution rate for individual species 
+                rcc[:,isp] = kcc[:,isp]*ccx[:,isp]*abs(1e0-co3x[:]*1e3/co3sat)**ncc*((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)
+                # calculation of derivatives of dissolution rate wrt conc. of caco3 species, dic and alk 
+                drcc_dcc[:,isp] = kcc[:,isp]*abs(1e0-co3x[:]*1e3/co3sat)**ncc*((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)
+                drcc_dco3[:,isp] = kcc[:,isp]*ccx[:,isp]*ncc*abs(1e0-co3x[:]*1e3/co3sat)**(ncc-1e0)  \
+                    *((1e0-co3x[:]*1e3/co3sat)>0e0).astype(float)*(-1e3/co3sat)
+                drcc_ddic[:,isp] = drcc_dco3[:,isp]*dco3_ddic[:]
+                drcc_dalk[:,isp] = drcc_dco3[:,isp]*dco3_dalk[:]
+        elif co2chem == 'mocsy': 
+            co2x,hco3x,co3x,prox,ohmega,dohmega_ddic,dohmega_dalk = co2sys_mocsy(nz,alkx*1e6,dicx*1e6,temp,dep*1e3,sal)
+            co2x = co2x/1e6
+            hco3x = hco3x/1e6
+            co3x = co3x/1e6
+            dohmega_ddic = dohmega_ddic*1e6
+            dohmega_dalk = dohmega_dalk*1e6
+            drcc_dohmega = np.zeros((nz,nspcc),dtype=np.float64)
+            for isp in range(nspcc):
+                # calculation of dissolution rate for individual species 
+                rcc[:,isp] = kcc[:,isp]*ccx[:,isp]*abs(1e0-ohmega[:])**ncc*((1e0-ohmega[:])>0e0).astype(float) 
+                # calculation of derivatives of dissolution rate wrt conc. of caco3 species, dic and alk 
+                drcc_dcc[:,isp] = kcc[:,isp]*abs(1e0-ohmega[:])**ncc*((1e0-ohmega[:])>0e0).astype(float)
+                drcc_dohmega[:,isp] = kcc[:,isp]*ccx[:,isp]*ncc*abs(1e0-ohmega[:])**(ncc-1e0)  \
+                    *((1e0-ohmega[:])>0e0).astype(float)*(-1e0)
+                drcc_ddic[:,isp] = drcc_dohmega[:,isp]*dohmega_ddic[:]
+                drcc_dalk[:,isp] = drcc_dohmega[:,isp]*dohmega_dalk[:]
         for iz in range(nz):
             row =(iz)*nsp 
             if iz == 0: # when upper condition must be taken account; *** comments for matrix filling are given only in this case 
@@ -1938,8 +2031,8 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     if any(turbo2): workdir += '_turbo2'
     if any(nobio): workdir += '_nobio'
     workdir += '/'
-    workdir += 'cc-'+str(ccflxi)+'_rr-'+str(om2cc)
-    if sense: workdir += '_dep-'+str(dep)
+    workdir += 'cc-'+'{:.1e}'.format(ccflxi)+'_rr-'+'{:.1e}'.format(om2cc)
+    if sense: workdir += '_dep-'+'{:.1e}'.format(dep)
     else: workdir += filename
     if not os.path.exists(workdir):os.makedirs(workdir)
     workdir += '/'
@@ -2065,7 +2158,12 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     dic[:]=dici*1e-6/1e3
     alk[:]=alki*1e-6/1e3
     if co2chem=='co2': co2,hco3,co3,pro,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dic,alk,nz)
-    if co2chem=='co2h2o':co2,hco3,co3,pro,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dic,alk,nz)
+    elif co2chem=='co2h2o':co2,hco3,co3,pro,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dic,alk,nz)
+    elif co2chem=='mocsy':
+        co2,hco3,co3,pro,ohmega,dohmega_ddic,dohmega_dalk = co2sys_mocsy(nz,alk*1e6,dic*1e6,temp,dep*1e3,sal)
+        co2 = co2/1e6
+        hco3 = hco3/1e6
+        co3 = co3/1e6
     pt=np.zeros(nz,dtype=np.float64)
     om=np.zeros(nz,dtype=np.float64)
     o2=np.zeros(nz,dtype=np.float64)
@@ -2088,6 +2186,9 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     hco3x[:]=hco3[:].copy()
     co3x[:]=co3[:].copy()
     co3i = co3[0]
+    if co2chem=='mocsy':        
+        cai = (0.02128e0/40.078e0) * sal/1.80655e0
+        co3sat = co3i*1e3/ohmega[0]
     ptx[:]=pt[:].copy()
     omx[:]=om[:].copy()
     o2x[:]=o2[:].copy()
@@ -2302,6 +2403,11 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
             # calcspecies(temp,sal,dep,dicx,alkx)
             if co2chem=='co2':co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
             elif co2chem=='co2h2o':co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dicx,alkx,nz)
+            elif co2chem=='mocsy':
+                co2x,hco3x,co3x,prox,ohmega,dohmega_ddic,dohmega_dalk = co2sys_mocsy(nz,alkx*1e6,dicx*1e6,temp,dep*1e3,sal)
+                co2x = co2x/1e6
+                hco3x = hco3x/1e6
+                co3x = co3x/1e6
             if info==1:  
                 dt=dt/10e0
                 print 'stop'
@@ -2514,18 +2620,19 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     if not os.path.exists(workdir):os.makedirs(workdir)
     workdir += '/'
     file_tmp=open(workdir+'lys_sense_'
-        +'cc-'+str(ccflxi)+'_rr-'+str(om2cc)  
+        +'cc-'+'{:.1e}'.format(ccflxi)+'_rr-'+'{:.1e}'.format(om2cc)  
         +'.txt','a') 
     print>>file_tmp,1e6*(co3i*1e3-co3sat), np.sum(ccx[0,:])*mcc/rho[0]*100e0, frt[0]  \
         ,np.sum(ccx[nz-1,:])*mcc/rho[nz-1]*100e0, frt[nz-1],np.sum(ccx[izml,:])*mcc/rho[izml]*100e0, frt[izml]
     file_tmp.close()
     file_tmp=open(workdir+'ccbur_sense_' 
-        +'cc-'+str(ccflxi)+'_rr-'+str(om2cc)  
+        +'cc-'+'{:.1e}'.format(ccflxi)+'_rr-'+'{:.1e}'.format(om2cc)  
         +'.txt','a') 
     print>>file_tmp,1e6*(co3i*1e3-co3sat), 1e6*np.sum(ccadv[:])
     file_tmp.close()
 
 def getinput():
+    co2chem     = raw_input('Enter how to calculate CO2 chemistry (co2 or mocsy): ')  
     ccflxi      = raw_input('Enter CaCO3 rain flux in mol cm-2 yr-1: ')  
     om2cc       = raw_input('Enter OM/CaCO3 rain ratio: ') 
     dep         = raw_input('Enter water depth in km: ')  
@@ -2534,6 +2641,8 @@ def getinput():
     biot        = raw_input('Enter bioturbation style (nobio, fickian, labs or turbo2): ') 
     oxonly      = raw_input('Oxic only for OM degradation? (True or False): ') 
     runmode     = raw_input('Enter simulation mode (sense, diss. exp., size, biotest or track2): ') 
+    if len(co2chem)==0:                # no input
+        co2chem = 'co2'                # default
     if len(ccflxi)==0:                # no input
         ccflxi = 12e-6                # default
     else:
@@ -2556,7 +2665,7 @@ def getinput():
         oxonly = False                # default 
     else:
         oxonly = eval(oxonly)
-    co2chem = 'co2'
+    # co2chem = 'co2'
     # co2chem = 'co2h2o'              # dic = co2+hco3+co3; alk = hco3+2*co3+oh-h
     sparse = True
     showiter = False
