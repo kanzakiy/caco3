@@ -1,5 +1,8 @@
 classdef caco3_therm
-    % functions and subroutines to calculate caco3 thermodynamics
+%
+%   *******************************************************************   %
+%   ***  Functions and subroutines to calculate caco3 thermodynamics **   %
+%   *******************************************************************   %
     
     properties
     end

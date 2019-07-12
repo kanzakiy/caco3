@@ -1,6 +1,9 @@
 classdef caco3_test
+%
+%   *******************************************************************   %
+%   *  Functions and subroutines to test IMP model during development *   %
+%   *******************************************************************   %
     
-    % testing the functions and subroutines
     properties
     end
     
@@ -1819,15 +1822,15 @@ classdef caco3_test
             %            global_var.om2cc = 0.7d0;   % rain ratio of organic matter to calcite
             
             % open files for output signal at 3 different depths
-            file_sigmly = sprintf('./2006_lysocline/matlab_sigmly.txt');
+            file_sigmly = sprintf('./1207_test/matlab_sigmly.txt');
             file_sigmlyid = fopen(file_sigmly,'wt');
-            file_sigmlyd = sprintf('./2006_lysocline/matlab_sigmlyd.txt');
+            file_sigmlyd = sprintf('./1207_test/matlab_sigmlyd.txt');
             file_sigmlydid = fopen(file_sigmlyd,'wt');
-            file_sigbtm = sprintf('./2006_lysocline/matlab_sigbtm.txt');
+            file_sigbtm = sprintf('./1207_test/matlab_sigbtm.txt');
             file_sigbtmid = fopen(file_sigbtm,'wt');
-            file_bound = sprintf('./2006_lysocline/matlab_bound.txt');
+            file_bound = sprintf('./1207_test/matlab_bound.txt');
             file_boundid = fopen(file_bound,'wt');
-            file_frac = sprintf('./2006_lysocline/matlab_frac.txt');
+            file_frac = sprintf('./1207_test/matlab_frac.txt');
             file_fracid = fopen(file_frac,'wt');
             
             
@@ -2424,15 +2427,15 @@ classdef caco3_test
             %            global_var.om2cc = 0.7d0;   % rain ratio of organic matter to calcite
             
             % open files for output signal at 3 different depths
-            file_sigmly = sprintf('./2006_lysocline/matlab_sigmly.txt');
+            file_sigmly = sprintf('./1207_test/matlab_sigmly.txt');
             file_sigmlyid = fopen(file_sigmly,'wt');
-            file_sigmlyd = sprintf('./2006_lysocline/matlab_sigmlyd.txt');
+            file_sigmlyd = sprintf('./1207_test/matlab_sigmlyd.txt');
             file_sigmlydid = fopen(file_sigmlyd,'wt');
-            file_sigbtm = sprintf('./2006_lysocline/matlab_sigbtm.txt');
+            file_sigbtm = sprintf('./1207_test/matlab_sigbtm.txt');
             file_sigbtmid = fopen(file_sigbtm,'wt');
-            file_bound = sprintf('./2006_lysocline/matlab_bound.txt');
+            file_bound = sprintf('./1207_test/matlab_bound.txt');
             file_boundid = fopen(file_bound,'wt');
-            file_frac = sprintf('./2006_lysocline/matlab_frac.txt');
+            file_frac = sprintf('./1207_test/matlab_frac.txt');
             file_fracid = fopen(file_frac,'wt');
             
             
@@ -3087,7 +3090,7 @@ classdef caco3_test
             
         end
         
-        function chk_through_sig_iso_dtchange(cc_rain_flx_in, rainratio_in, dep_in, dt_in, oxonly_in)
+        function chk_through_sig_iso_dtchange(cc_rain_flx_in, rainratio_in, dep_in, dt_in, oxonly_in, folder)
             %% change dt but use w and others from previous calculation
             %% check the calculation of conc. and flx of om, o2, cc & clay using subroutines in caco3_test_mod_v5_6.f90, also save profiles in .txt files
             % burial rate is updated at a give time step until it converges well
@@ -3099,6 +3102,7 @@ classdef caco3_test
             % please copy and paste results to whatever file to be compared with results with MATLAB version
             % NOTE: Now this code is almost the same as the whole code. The difference is only that this code does not track any signals
             
+            mkdir(folder);      % create output folder
             interval =10; % choose a value between 1 to nz; om depth profile is shown with this interval; e.g., if inteval = nz, om conc. at all depths are shown
             % e.g., if interval = 5, om conc. at 5 depths are shown
             flag_steadystate = false;
@@ -3132,18 +3136,29 @@ classdef caco3_test
             %            global_var.om2cc = 0.7d0;   % rain ratio of organic matter to calcite
             
             % open files for output signal at 3 different depths
-            file_sigmly = sprintf('./2006_lysocline/matlab_sigmly.txt');
+%             file_sigmly = sprintf('./1207_test/matlab_sigmly.txt');
+%             file_sigmlyid = fopen(file_sigmly,'wt');
+%             file_sigmlyd = sprintf('./1207_test/matlab_sigmlyd.txt');
+%             file_sigmlydid = fopen(file_sigmlyd,'wt');
+%             file_sigbtm = sprintf('./1207_test/matlab_sigbtm.txt');
+%             file_sigbtmid = fopen(file_sigbtm,'wt');
+%             file_bound = sprintf('./1207_test/matlab_bound.txt');
+%             file_boundid = fopen(file_bound,'wt');
+%             file_frac = sprintf('./1207_test/matlab_frac.txt');
+%             file_fracid = fopen(file_frac,'wt');
+
+            file_sigmly = sprintf('%s/matlab_sigmly.txt', folder);
             file_sigmlyid = fopen(file_sigmly,'wt');
-            file_sigmlyd = sprintf('./2006_lysocline/matlab_sigmlyd.txt');
+            file_sigmlyd = sprintf('%s/matlab_sigmlyd.txt', folder);
             file_sigmlydid = fopen(file_sigmlyd,'wt');
-            file_sigbtm = sprintf('./2006_lysocline/matlab_sigbtm.txt');
+            file_sigbtm = sprintf('%s/matlab_sigbtm.txt', folder);
             file_sigbtmid = fopen(file_sigbtm,'wt');
-            file_bound = sprintf('./2006_lysocline/matlab_bound.txt');
+            file_bound = sprintf('%s/matlab_bound.txt', folder);
             file_boundid = fopen(file_bound,'wt');
-            file_frac = sprintf('./2006_lysocline/matlab_frac.txt');
+            file_frac = sprintf('%s/matlab_frac.txt', folder);
             file_fracid = fopen(file_frac,'wt');
-            
-            
+
+
             flg_500 = false;    % error in calculation?
             
             
@@ -3178,11 +3193,11 @@ classdef caco3_test
             
             %%% ~~~~~~~~~~~~~~ set recording time
             % call recordtime()
-            [rectime, cntrec, time_spn, time_trs, time_aft] = caco3_main.recordtime(global_var.nrec, wi, global_var.ztot, global_var.def_biotest, global_var.def_sense, global_var.def_nonrec);
+            [rectime, cntrec, time_spn, time_trs, time_aft] = caco3_main.recordtime(global_var.nrec, wi, global_var.ztot, global_var.def_biotest, global_var.def_sense, global_var.def_nonrec, folder);
             
             % water depth, i and f denote initial and final values
             depi = dep_in;  % depth before event
-            depf = dep_in;   % max depth to be changed to
+            depf = 5.0d0;   % max depth to be changed to
             
             % %  flux ratio of fine particles: i and f denote initial and final values
             flxfini = 0.5d0;  %  total caco3 rain flux for fine species assumed before event
@@ -3748,7 +3763,7 @@ classdef caco3_test
                 if (time>=rectime(cntrec))
                     %        call recordprofile(cntrec )
                     caco3_main.recordprofile(cntrec, global_var.nz, global_var.z, age, pt, global_var.msed, wi, rho, cc, ccx, dic, dicx, alk, alkx, co3, co3x, co3sat ...
-                        , rcc, pro, o2x, oxco2, anco2, bc.om, global_var.mom, global_var.mcc, d13c_ocni, d18o_ocni, up,dwn, cnr, adf, global_var.nspcc, ptx, w, frt, prox, omx, d13c_blk, d18o_blk)
+                        , rcc, pro, o2x, oxco2, anco2, bc.om, global_var.mom, global_var.mcc, d13c_ocni, d18o_ocni, up,dwn, cnr, adf, global_var.nspcc, ptx, w, frt, prox, omx, d13c_blk, d18o_blk, folder)
                     
                     cntrec = cntrec + 1;
                     if (cntrec == global_var.nrec+1)
@@ -3849,14 +3864,18 @@ classdef caco3_test
             
                         % recording end results for lysoclines and caco3 burial fluxes
             if(oxonly_in)
-                str_lys = sprintf('./2006_lysocline/lys_sense_cc-%2.1e_rr-%.2f_oxonly.txt',cc_rain_flx_in, rainratio_in);
-                str_ccbur = sprintf('./2006_lysocline/ccbur_sense_cc-%2.1e_rr-%.2f_oxonly.txt',cc_rain_flx_in, rainratio_in);
+                sprintf('%s/matlab_frac.txt', folder);
+        %         str_lys = sprintf('./1207_test/lys_sense_cc-%2.1e_rr-%.2f_oxonly.txt',cc_rain_flx_in, rainratio_in);
+        %         str_ccbur = sprintf('./1207_test/ccbur_sense_cc-%2.1e_rr-%.2f_oxonly.txt',cc_rain_flx_in, rainratio_in);
+                str_lys = sprintf('%s/lys_sense_cc-%2.1e_rr-%.2f_oxonly.txt',folder,cc_rain_flx_in, rainratio_in);
+                str_ccbur = sprintf('%s/ccbur_sense_cc-%2.1e_rr-%.2f_oxonly.txt',folder,cc_rain_flx_in, rainratio_in);
             else
-                str_lys = sprintf('./2006_lysocline/lys_sense_cc-%2.1e_rr-%.2f_oxanox.txt',cc_rain_flx_in, rainratio_in);
-                str_ccbur = sprintf('./2006_lysocline/ccbur_sense_cc-%2.1e_rr-%.2f_oxanox.txt',cc_rain_flx_in, rainratio_in);
-            end
-            
-            file_tmp = fopen(str_lys,'at+');
+        %         str_lys = sprintf('./1207_test/lys_sense_cc-%2.1e_rr-%.2f_oxanox.txt',cc_rain_flx_in, rainratio_in);
+        %         str_ccbur = sprintf('./1207_test/ccbur_sense_cc-%2.1e_rr-%.2f_oxanox.txt',cc_rain_flx_in, rainratio_in);
+                str_lys = sprintf('%s/lys_sense_cc-%2.1e_rr-%.2f_oxanox.txt',folder, cc_rain_flx_in, rainratio_in);
+                str_ccbur = sprintf('%s/ccbur_sense_cc-%2.1e_rr-%.2f_oxanox.txt',folder, cc_rain_flx_in, rainratio_in);
+            end            
+            file_tmp = fopen(str_lys,'at+');    % the 4th column is the plotted CaCO3 wt%!
             fprintf(file_tmp,'%17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \t %17.16e \n ', 1d6*(co3i*1d3-co3sat), sum(ccx(1,:))*global_var.mcc/rho(1)*100d0, frt(1), ...
                 sum(ccx(global_var.nz,:))*global_var.mcc/rho(global_var.nz)*100d0, frt(global_var.nz),sum(ccx(izml,:))*global_var.mcc/rho(izml)*100d0, frt(izml));
             fclose(file_tmp);
@@ -3915,15 +3934,15 @@ classdef caco3_test
             
             if(~global_var.def_nonrec)
             % open files for output signal at 3 different depths
-            file_sigmly = sprintf('./2006_lysocline/matlab_sigmly.txt');
+            file_sigmly = sprintf('./1207_test/matlab_sigmly.txt');
             file_sigmlyid = fopen(file_sigmly,'wt');
-            file_sigmlyd = sprintf('./2006_lysocline/matlab_sigmlyd.txt');
+            file_sigmlyd = sprintf('./1207_test/matlab_sigmlyd.txt');
             file_sigmlydid = fopen(file_sigmlyd,'wt');
-            file_sigbtm = sprintf('./2006_lysocline/matlab_sigbtm.txt');
+            file_sigbtm = sprintf('./1207_test/matlab_sigbtm.txt');
             file_sigbtmid = fopen(file_sigbtm,'wt');
-            file_bound = sprintf('./2006_lysocline/matlab_bound.txt');
+            file_bound = sprintf('./1207_test/matlab_bound.txt');
             file_boundid = fopen(file_bound,'wt');
-            file_frac = sprintf('./2006_lysocline/matlab_frac.txt');
+            file_frac = sprintf('./1207_test/matlab_frac.txt');
             file_fracid = fopen(file_frac,'wt');
             end            
             

@@ -1,5 +1,9 @@
 classdef caco3_main
-    % trying a simple diagenesis
+%
+%   *******************************************************************   %
+%   ***  Main subroutines for the IMP diagenesis model ***********   %
+%   *******************************************************************   %
+    
     % irregular grid
     % separate into subroutines
     %====================================
@@ -56,14 +60,14 @@ classdef caco3_main
         def_biotest = false;   	% testing 5kyr signal change event
         def_size = false;       % testting two size caco3 simulation
         
-        def_sense = true;       % without signal tracking
+        def_sense = false;       % without signal tracking
         def_track2 = false;   	% using method2 to track signals (default 42 species)
         def_nondisp = true;       % won't showing results on display
-        def_nonrec = true;       % define not recording profiles?
+        def_nonrec = false;       % define not recording profiles?
         def_showiter = false;      % show co2 iterations & error in calccaco3sys
         def_sparse = false;       % using sparse matrix solve (you need UMFPACK)
         
-        def_allnobio = false;       % with/without bioturbation
+        def_allnobio = false;       % without bioturbation?
         def_allturbo2 = false;      % all turbo2 mixing
         def_alllabs = false;        % all labs mixing
         def_allnonlocal = false; 	% ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
@@ -1831,12 +1835,13 @@ classdef caco3_main
         end
         
         function recordprofile(itrec, nz,z,age,pt,msed,wi,rho,cc,ccx,dic,dicx,alk,alkx,co3,co3x,co3sat ...
-                ,rcc,pro,o2x,oxco2,anco2,om,mom,mcc,d13c_ocni,d18o_ocni,up,dwn,cnr,adf,nspcc,ptx,w,frt,prox,omx,d13c_blk,d18o_blk)
+                ,rcc,pro,o2x,oxco2,anco2,om,mom,mcc,d13c_ocni,d18o_ocni,up,dwn,cnr,adf,nspcc,ptx,w,frt,prox,omx,d13c_blk,d18o_blk, folder)
             %% write sediment profiles in files
             
             if (itrec==0)
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ptx-%3.3i.txt',itrec);
+%                str = sprintf('./1207_test/matlab_ptx-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_ptx-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1845,7 +1850,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_ccx-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1856,7 +1861,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_o2x-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_o2x-%3.3i.txt',folder, itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
@@ -1865,7 +1870,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_omx-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_omx-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
@@ -1874,7 +1879,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_ccx_sp-%3.3i.txt',folder,itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
@@ -1884,7 +1889,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_sig-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_sig-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
@@ -1893,7 +1898,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_bur-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_bur-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
@@ -1903,7 +1908,7 @@ classdef caco3_main
             else
                 
                 %    open(unit=file_tmp,file=trim(adjustl(workdir))//'ptx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ptx-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_ptx-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %        write(file_tmp,*) z(iz),age(iz),pt(iz)*msed/2.5d0*100,0d0,1d0  ,wi
@@ -1912,7 +1917,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_ccx-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),sum(cc(iz,:))*100d0/2.5d0*100d0, dic(iz)*1d3, alk(iz)*1d3, co3(iz)*1d3-co3sat &
@@ -1923,7 +1928,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'o2x-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_o2x-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_o2x-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),o2x(iz)*1d3, oxco2(iz), anco2(iz)
@@ -1932,7 +1937,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'omx-'//trim(adjustl(dumchr(1)))//'.txt',action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_omx-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_omx-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                 write(file_tmp,*) z(iz),age(iz),om(iz)*mom/2.5d0*100d0
@@ -1941,7 +1946,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'ccx_sp-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_ccx_sp-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_ccx_sp-%3.3i.txt',folder,itrec);
                 fmt=[repmat('%17.16e \t',1,nspcc+2) '\n'];
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
@@ -1951,7 +1956,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'sig-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_sig-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_sig-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),d13c_ocni,d18o_ocni
@@ -1960,7 +1965,7 @@ classdef caco3_main
                 fclose(file_tmp);
                 
                 %                open(unit=file_tmp,file=trim(adjustl(workdir))//'bur-'//trim(adjustl(dumchr(1)))//'.txt' ,action='write',status='replace')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_bur-%3.3i.txt',itrec);
+                str = sprintf('%s/matlab_bur-%3.3i.txt',folder,itrec);
                 file_tmp = fopen(str,'wt');
                 for iz = 1:nz
                     %                write(file_tmp,*) z(iz),age(iz),w(iz),up(iz),dwn(iz),cnr(iz),adf(iz)
@@ -1972,7 +1977,7 @@ classdef caco3_main
             
         end
         
-        function [rectime, cntrec, time_spn, time_trs, time_aft] = recordtime(nrec,wi, ztot, def_biotest, def_sense, def_nonrec)
+        function [rectime, cntrec, time_spn, time_trs, time_aft] = recordtime(nrec,wi, ztot, def_biotest, def_sense, def_nonrec, folder)
             %% set recording time
             
             rectime = zeros(1, nrec);
@@ -2008,7 +2013,7 @@ classdef caco3_main
             cntrec = 1;  % rec number (increasing with recording done )
             if(~def_nonrec)
                 % open(unit=file_tmp,file=trim(adjustl(workdir))//'rectime.txt',action='write',status='unknown')
-                str = sprintf('./2106_changedt_high_rr_ccflx54/matlab_rectime.txt');
+                str = sprintf('%s/matlab_rectime.txt', folder);
                 file_tmp = fopen(str,'wt');
                 for itrec=1:nrec
                     %write(file_tmp,*) rectime(itrec)  % recording when records are made
