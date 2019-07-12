@@ -4,17 +4,25 @@ function run_sig_iso_dtchange(cc_rain_flx_in, rainratio_in, dep_in, dt_in, oxonl
 %   ***  Running IMP for signal tracking and lysocline exps ***********   %
 %   *******************************************************************   %
     
+%   cc_rain_flx_in      :   influx of CaCO3  [mol cm-2 yr-1]
+%   rainratio_in        :   assumed OM/CaCO3-ratio [-]
+%   dep_in              :   water depth [km] (set dep_max, below, to different depth for dissolution experiment)
+%   dt_in               :   time step to start simulation with [yr]
+%   oxonly_in           :   select oxic only model for OM degradation [true/false]
+%   folder              :   path to output folder, will be created 
+
     % Example run: 
     % run_sig_iso_dtchange(6.0e-5, 1.5, 0.24, 1d8, true, './1207_test')
+    
+    
 
     %% function to run the model for signal tracking (def_sense = true; in main)
     %% and single lysocline experiments (def_sense = false; in main)
     %% changes dt automatically if pH can't be calculated but uses w and other results from previous calculation
     %% saves profiles in .txt files
     % burial rate is updated at a give time step until it converges well
-    % dep_max: max depth to be changed to during the experiment
     
-    
+    dep_max = 5.0d0;    %   max depth to be changed to during the experiment
 %    folder = './0_test';
     mkdir(folder);      % create output folder
     interval =10;       % if def_nondisp = false: choose a value between 1 to nz; om depth profile is shown with this interval; e.g., if inteval = 1, conc. at all depths are shown
@@ -24,10 +32,10 @@ function run_sig_iso_dtchange(cc_rain_flx_in, rainratio_in, dep_in, dt_in, oxonl
     global_var = caco3_main;
 
     % initialize the boundary conditions
-    [bc, global_var] = caco3_test.caco3_set_boundary_cond(global_var);
+    [bc, global_var] = caco3_main.caco3_set_boundary_cond(global_var);
 
     % initialize mixing type
-    mix_type = caco3_test.caco3_set_mixing(global_var);
+    mix_type = caco3_main.caco3_set_mixing(global_var);
 
     % set to input values to boundary conditions:
     bc.ccflxi = cc_rain_flx_in;      % mol (CaCO3) cm-2 yr-1
@@ -101,7 +109,7 @@ function run_sig_iso_dtchange(cc_rain_flx_in, rainratio_in, dep_in, dt_in, oxonl
 
     % water depth, i and f denote initial and final values
     depi = dep_in;  % depth before event
-    depf = 5.0d0;   % max depth to be changed to
+    depf = dep_max;   % max depth to be changed to
 
     % %  flux ratio of fine particles: i and f denote initial and final values
     flxfini = 0.5d0;  %  total caco3 rain flux for fine species assumed before event

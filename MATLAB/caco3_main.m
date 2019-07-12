@@ -60,7 +60,7 @@ classdef caco3_main
         def_biotest = false;   	% testing 5kyr signal change event
         def_size = false;       % testting two size caco3 simulation
         
-        def_sense = false;       % without signal tracking
+        def_sense = true;       % without signal tracking
         def_track2 = false;   	% using method2 to track signals (default 42 species)
         def_nondisp = true;       % won't showing results on display
         def_nonrec = false;       % define not recording profiles?
@@ -107,13 +107,91 @@ classdef caco3_main
     end
     
     methods(Static)
-        
+                
         function obj = caco3_main(arg1)
             % set default values
             %            fprintf('in caco3_main \n');
             %            obj.nz = arg1;
         end
+   
+        function [bc, global_var] = caco3_set_boundary_cond(global_var)
+            
+            bc.ccflxi = 12d-6;      % was 10d-6;      % mol (CaCO3) cm-2 yr-1  % a reference caco3 flux; Emerson and Archer (1990)
+            bc.omflx = 12d-6;       % mol cm-2 yr-1       % a reference om flux; Emerson and Archer (1990)
+            bc.detflx = 180d-6;     % g cm-2 yr-1  % a reference detrital flux; MUDS input http://forecast.uchicago.edu/Projects/muds.html
+            bc.om = 1d-8*ones(1,global_var.nz);           % assume an arbitrary low conc.
+            bc.alki =  2285d0;      % uM  % a reference ALK; MUDS
+            bc.dici = 2211d0;       % uM   % a reference DIC; MUDS
+            bc.o2i = 165d0;         % uM     % a reference O2 input ; MUDS
+            bc.o2 = 0.0;
+            bc.tmp = 2.0;
+            bc.sal = 35.0;
+            bc.dep = 3.5; % depth in km
+
+            
+            bc.oxic = true;            % oxic only model of OM degradation by Emerson (1985)
+            bc.anoxic = true;          % oxic-anoxic model of OM degradation by Archer (1991)
+            if(global_var.def_oxonly)
+                bc.anoxic = false;         % oxic only model of OM degradation by Emerson (1985)
+            end
+            
+            if(global_var.def_sense)
+                global_var.ztot = 50d0;         % cm , total sediment thickness
+            else
+                global_var.ztot = 500d0;         % cm , total sediment thickness
+            end
+            
+            if(global_var.def_sense)
+                global_var.nspcc = 1;          % number of CaCO3 species
+            elseif(global_var.def_track2)
+                global_var.nspcc = 42;
+            elseif(global_var.def_size)
+                global_var.nspcc = 8;
+            else
+                global_var.nspcc = 4;
+            end
+            
+            if(global_var.def_nodissolve)
+                global_var.kcci = 0d0*365.25d0;  % /yr  ;cf., 0.15 to 30 d-1 Emerson and Archer (1990) 0.1 to 10 d-1 in Archer 1991
+            else
+                global_var.kcci = 1d0*365.25d0;  % /yr
+            end
+            
+        end
         
+        function mix_type = caco3_set_mixing(global_var)
+            %%  define the type of mixing to be used
+            
+            % biogenic reworking assumed?
+            if(global_var.def_allnobio)
+                mix_type.nobio =  true(1, global_var.nspcc + 2);
+            else
+                mix_type.nobio = false(1, global_var.nspcc + 2);
+            end
+            
+            % mixing info from labs?
+            if(global_var.def_alllabs)
+                mix_type.labs =  true(1, global_var.nspcc + 2);
+            else
+                mix_type.labs = false(1, global_var.nspcc + 2);
+            end
+            
+            % random mixing?
+            if(global_var.def_allturbo2)
+                mix_type.turbo2 =  true(1, global_var.nspcc + 2);
+            else
+                mix_type.turbo2 = false(1, global_var.nspcc + 2);
+            end
+            
+            % ON if assuming non-local mixing (i.e., if labs or turbo2 is ON)
+            if(global_var.def_allnonlocal)
+                mix_type.nonlocal =  true(1, global_var.nspcc + 2);
+            else
+                mix_type.nonlocal = false(1, global_var.nspcc + 2);
+            end
+            
+        end
+                
         function [dz,z] = makegrid(beta,nz,ztot, def_recgrid)
             
             for iz=1:nz
