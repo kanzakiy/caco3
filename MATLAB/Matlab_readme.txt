@@ -41,18 +41,3 @@ are defined under properties of the class caco3_main.
 3) matlab_caco3_signals.py			:	plots the time change of the proxy signals, e.g. as in Fig. 8 of the masnuscript
 
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%% installation of Basic Linear Algebra Subroutines (BLAS):
-
-Need BLAS libraries - follow instructions on https://www.mathworks.com/help/matlab/matlab_external/calling-lapack-and-blas-functions-from-mex-files.html 
-to build and copy the MEX file matrixDivide.c to your local matlab working-directory:
-
-copyfile(fullfile(matlabroot,'extern','examples','refbook','matrixDivide.c'),'.')
-fileattrib('matrixDivide.c','+w')
-mex -v matrixDivide.c -lmwlapack
-
-then can be used as:
-X = matrixDivide(A,B)
-
-
