@@ -794,8 +794,9 @@ def o2calc_sbox(
     izox,nz,poro,o2,kom,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
     ):
 #    print izox
-    if izox!=nz-1:iz_zero = izox  # modification made only for Python 
-    else:iz_zero = izox-1  # modification made only for Python 
+    # if izox!=nz-1:iz_zero = izox  # modification made only for Python 
+    # else:iz_zero = izox-1  # modification made only for Python 
+    iz_zero = izox
     nsp = 1
     nmx=nsp*nz
     amx=np.zeros((nmx,nmx),dtype=np.float64)
@@ -870,8 +871,9 @@ def o2calc_sbox(
 def calcflxo2_sbox( 
     nz,sporo,kom,omx,dz,poro,dif_o2,dt,o2,o2x,izox,ox2om,o2i  # input
     ):
-    if izox!=nz-1:iz_zero = izox  # modification made only for Python 
-    else:iz_zero = izox-1  # modification made only for Python 
+    # if izox!=nz-1:iz_zero = izox  # modification made only for Python 
+    # else:iz_zero = izox-1  # modification made only for Python 
+    iz_zero = izox
     # fluxes relevant to oxygen 
     o2dec = np.float64(0e0)
     o2dif = np.float64(0e0)
@@ -2317,21 +2319,35 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
                     iizox_errmin = izox
                     for iizox in range(nz):   ## if oxygen is depleted within calculation domain, lower boundary changes to zero concs.
 #                        print iizox                        
-                        o2x = o2calc_sbox(  
-                            iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
-                            )                        
+                        if iizox<nz-1: 
+                            o2x = o2calc_sbox(  
+                                iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                                )
+                        elif iizox==nz-1: 
+                            o2x = o2calc_ox(  
+                                izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                                )
                         if showiter: print  'o2 :',iizox, o2x[0:nz:nz/10]
                         if (o2x[:]>=0e0).all():
                             if np.abs(o2x[max(iizox-1,0)])<error_o2min: 
                                 error_o2min = np.abs(o2x[max(iizox-1,0)])
                                 iizox_errmin = iizox
-                    o2x = o2calc_sbox(  
-                        iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
-                        )
-                    if showiter: print  'o2 :',iizox_errmin, o2x[0:nz:nz/10]
-                    o2dec,o2dif,o2tflx,o2res = calcflxo2_sbox( 
-                        nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,iizox_errmin,ox2om,o2i  # input
-                        )
+                    if iizox_errmin<nz-1:
+                        o2x = o2calc_sbox(  
+                            iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                            )
+                        if showiter: print  'o2 :',iizox_errmin, o2x[0:nz:nz/10]
+                        o2dec,o2dif,o2tflx,o2res = calcflxo2_sbox( 
+                            nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,iizox_errmin,ox2om,o2i  # input
+                            )
+                    elif iizox_errmin==nz-1:
+                        o2x = o2calc_ox(  
+                            izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                            )
+                        if showiter: print  'o2 :',iizox_errmin, o2x[0:nz:nz/10]
+                        o2dec,o2dif,o2tflx,o2res = calcflxo2_ox( 
+                            nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,ox2om,o2i  # input
+                            )
                     iizox_errmin,kom_dum,zox,kom_ox_dum,kom_an_dum = calc_zox( 
                         oxic,anoxic,nz,o2x,o2th,komi,ztot,z,o2i,dz  # input
                         )
@@ -2343,13 +2359,22 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
                 if showiter: print  'zox',itr,izox, iizox_errmin
                 if izox==iizox_errmin: 
                     if not all_oxic:
-                        o2x = o2calc_sbox(  
-                            izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
-                            )
-                        if showiter: print  'o2 :',izox, o2x[0:nz:nz/10]
-                        o2dec,o2dif,o2tflx,o2res = calcflxo2_sbox( 
-                            nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,izox,ox2om,o2i  # input
-                            )
+                        if izox<nz-1:
+                            o2x = o2calc_sbox(  
+                                izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                                )
+                            if showiter: print  'o2 :',izox, o2x[0:nz:nz/10]
+                            o2dec,o2dif,o2tflx,o2res = calcflxo2_sbox( 
+                                nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,izox,ox2om,o2i  # input
+                                )
+                        elif izox == nz-1: 
+                            o2x = o2calc_ox(  
+                                izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt,o2i,ox2om,o2x # input
+                                )
+                            if showiter: print  'o2 :',izox, o2x[0:nz:nz/10]
+                            o2dec,o2dif,o2tflx,o2res = calcflxo2_ox( 
+                                nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt,o2,o2x,ox2om,o2i  # input
+                                )
                     break 
                 if error < minerr :  
                     minerr = error 
