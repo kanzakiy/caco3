@@ -1,6 +1,6 @@
 
 !**************************************************************************************************************************************
-subroutine caco3() 
+subroutine caco3(ccflxi,om2cc,depi2,dti2,filechr,oxonly,biotmode) 
 ! a signal tracking diagenesis
 implicit none 
 
@@ -28,6 +28,11 @@ integer(kind=4)nspcc   ! number of CaCO3 species
 
 parameter(nz=nzinput)  
 parameter(nspcc=nspccinput)
+
+real(kind=8),intent(in)::ccflxi,om2cc,depi2,dti2
+character*255,intent(in)::filechr,biotmode
+logical,intent(in)::oxonly
+
 integer(kind=4),parameter :: nsig = 2
 integer(kind=4) nt_spn,nt_trs,nt_aft
 real(kind=8) cc(nz,nspcc),ccx(nz,nspcc)  ! mol cm-3 sld; concentration of caco3, subscript x denotes dummy variable used during iteration 
@@ -65,7 +70,7 @@ real(kind=8) :: r14ci = 1.2d-12 ! c14/c12 in modern, Aloisi et al. 2004, citing 
 real(kind=8) r2d,d2r
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
 real(kind=8) flxfrc(nspcc),flxfrc2(nspcc)  ! flux fractions used for assigning flux values to realized isotope input changes 
-real(kind=8) :: ccflxi = 10d-6 ! mol (CaCO3) cm-2 yr-1  ! a reference caco3 flux; Emerson and Archer (1990) 
+! real(kind=8) :: ccflxi = 10d-6 ! mol (CaCO3) cm-2 yr-1  ! a reference caco3 flux; Emerson and Archer (1990) 
 real(kind=8) :: omflx = 12d-6 ! mol cm-2 yr-1       ! a reference om flux; Emerson and Archer (1990)
 real(kind=8) :: detflx = 180d-6 ! g cm-2 yr-1  ! a reference detrital flux; MUDS input http://forecast.uchicago.edu/Projects/muds.html
 #ifndef mocsy
@@ -104,7 +109,7 @@ real(kind=8) :: mom = 30d0 ! g/mol OM assuming CH2O
 real(kind=8) :: msed = 258.16d0 ! g/mol arbitrary sediment g/mol assuming kaolinite ( 	Al2Si2O5(OH)4 )
 real(kind=8) :: mcc(nspcc) = 100d0 ! g/mol CaCO3 
 real(kind=8) :: ox2om = 1.3d0 ! o2/om ratio for om decomposition (Emerson 1985; Archer 1991)
-real(kind=8) :: om2cc = 0.666d0  ! rain ratio of organic matter to calcite
+! real(kind=8) :: om2cc = 0.666d0  ! rain ratio of organic matter to calcite
 ! real(kind=8) :: om2cc = 0.5d0  ! rain ratio of organic matter to calcite
 real(kind=8) :: o2th = 0d0 ! threshold oxygen level below which not to calculate 
 real(kind=8) :: dev = 1d-6 ! deviation addumed 
@@ -120,7 +125,7 @@ real(kind=8) mvom, mvsed, mvcc(nspcc)  ! molar volumes (cm3 mol-1) mv_i = m_i/rh
 real(kind=8) keq1, keq2  ! equilibrium const. for h2co3 and hco3 dissociations and functions to calculate them  
 real(kind=8) co3sat, keqag  ! co3 conc. at caco3 saturation and solubility product of aragonite  
 real(kind=8) zox, zoxx  ! oxygen penetration depth (cm) and its dummy variable 
-real(kind=8) dep, depi,depf ! water depth, i and f denote initial and final values 
+real(kind=8) dep,depi,depf ! water depth, i and f denote initial and final values 
 real(kind=8) corrf, df, err_f, err_fx  !  variables to help total fraction of solid materials to converge 1
 real(kind=8) dic(nz), dicx(nz), alk(nz), alkx(nz), o2(nz), o2x(nz) !  mol cm-3 porewater; dic, alk and o2 concs., x denotes dummy variables 
 real(kind=8) dif_dic(nz), dif_alk(nz), dif_o2(nz) ! dic, alk and o2 diffusion coeffs inclueing effect of tortuosity
@@ -181,7 +186,7 @@ real(kind=8) :: trans(nz,nz,nspcc+2)  ! transition matrix
 real(kind=8) :: transdbio(nz,nz), translabs(nz,nz) ! transition matrices created assuming Fickian mixing and LABS simulation
 real(kind=8) :: transturbo2(nz,nz), translabs_tmp(nz,nz) ! transition matrices assuming random mixing and LABS simulation 
 character*512 workdir  ! work directory and created file names 
-character*255 filechr  ! work directory and created file names 
+! character*255 filechr  ! work directory and created file names 
 character*25 dumchr(3)  ! character dummy variables 
 character*25 arg, chr(3,4)  ! used for reading variables and dummy variables
 integer(kind=4) dumint(8)  ! dummy integer 
@@ -218,13 +223,60 @@ labs = .true.
 anoxic = .false. 
 #endif
 
+print*
+print*,'ccflxi    = ',ccflxi
+print*,'om2cc     = ',om2cc
+print*,'dep       = ',depi2
+print*,'dt        = ',dti2
+print*,'runname   = ',trim(adjustl(filechr))
+print*,'oxonly?   = ',oxonly
+print*,'biot      = ',trim(adjustl(biotmode))
+print*
+! print*,'If above variables are OK, please press [enter] to start'
+! read *
+
+select case(trim(adjustl(biotmode))) 
+    case('nobio','NOBIO','Nobio')
+        nobio = .true.
+        print*
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXXXX No bioturbation XXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*
+    case('turbo2','TURBO2','Turbo2')
+        turbo2 = .true.
+        print*
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXX Homogeneous mixing XXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*
+    case('labs','LABS','Labs')
+        labs = .true. 
+        print*
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXXXXX LABS mixing XXXXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*
+    case default  
+        print*
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXX Fickian mixing XXXXXXXXXXXXXXXX'
+        print*,'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        print*
+endselect 
+
+if (oxonly) anoxic = .false. 
+
 flg_500 = .false.
+
+dt = dti2
+dep = depi2
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)  ! get date and time in character 
 
 !!! get variables !!!
 ! get total caco3 flux, om/caco3 rain ratio and water depth   
-call getinput(ccflxi,om2cc,dti,filechr,dep,anoxic,nobio,labs,turbo2,nspcc)
+! call getinput(ccflxi,om2cc,dti,filechr,dep,anoxic,nobio,labs,turbo2,nspcc)
 print'(3A,3E11.3)','ccflxi','om2cc','dep:',ccflxi,om2cc, dep  ! printing read data 
 
 ! prepare directory to store result files 
@@ -602,10 +654,17 @@ do
             do iizox = 1,nz   
             ! do iizox = izox,nz   
             ! do iizox = max(1,izox-20),min(nz,izox+20)   
-                call o2calc_sbox(  &
-                    o2x  & ! output
-                    ,iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
-                    )
+                if (iizox<nz) then 
+                    call o2calc_sbox(  &
+                        o2x  & ! output
+                        ,iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                        )
+                else 
+                    call o2calc_ox(  &
+                        o2x  & ! output
+                        ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                        )
+                endif 
                 ! print'(A,I0,10E11.3)', 'o2 :',iizox,(o2x(iz)*1d3,iz=1,nz,nz/10)
                 ! fluxes relevant to oxygen 
                 ! call calcflxo2_sbox( &
@@ -621,16 +680,28 @@ do
                 endif 
             enddo 
             ! print*,iizox_errmin 
-            call o2calc_sbox(  &
-                o2x  & ! output
-                ,iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
-                )
-            ! print'(A,I0,10E11.3)', 'o2 :',iizox_errmin,(o2x(iz)*1d3,iz=1,nz,nz/10)
-            ! fluxes relevant to oxygen 
-            call calcflxo2_sbox( &
-                o2dec,o2dif,o2tflx,o2res  & ! output 
-                ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,iizox_errmin,ox2om,o2i  & ! input
-                )
+            if (iizox_errmin < nz) then 
+                call o2calc_sbox(  &
+                    o2x  & ! output
+                    ,iizox_errmin,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                    )
+                ! print'(A,I0,10E11.3)', 'o2 :',iizox_errmin,(o2x(iz)*1d3,iz=1,nz,nz/10)
+                ! fluxes relevant to oxygen 
+                call calcflxo2_sbox( &
+                    o2dec,o2dif,o2tflx,o2res  & ! output 
+                    ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,iizox_errmin,ox2om,o2i  & ! input
+                    )
+            else 
+                call o2calc_ox(  &
+                    o2x  & ! output
+                    ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                    )
+                !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+                call calcflxo2_ox( &
+                    o2dec,o2dif,o2tflx,o2res  & ! output 
+                    ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,ox2om,o2i  & ! input
+                    )
+            endif 
                 
             ! izox_calc_done = .false.
             ! if (oxic) then 
@@ -699,16 +770,28 @@ do
             if (all_oxic) then            
                 exit 
             else 
-                call o2calc_sbox(  &
-                    o2x  & ! output
-                    ,izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
-                    )
-                ! print'(A,I0,10E11.3)', 'o2 :',izox,(o2x(iz)*1d3,iz=1,nz,nz/10)
-                ! fluxes relevant to oxygen 
-                call calcflxo2_sbox( &
-                    o2dec,o2dif,o2tflx,o2res  & ! output 
-                    ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
-                    )       
+                if (izox < nz) then 
+                    call o2calc_sbox(  &
+                        o2x  & ! output
+                        ,izox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                        )
+                    ! print'(A,I0,10E11.3)', 'o2 :',izox,(o2x(iz)*1d3,iz=1,nz,nz/10)
+                    ! fluxes relevant to oxygen 
+                    call calcflxo2_sbox( &
+                        o2dec,o2dif,o2tflx,o2res  & ! output 
+                        ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
+                        )       
+                else 
+                    call o2calc_ox(  &
+                        o2x  & ! output
+                        ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
+                        )
+                    !  fluxes relevant to o2 (at the same time checking the satisfaction of difference equations) 
+                    call calcflxo2_ox( &
+                        o2dec,o2dif,o2tflx,o2res  & ! output 
+                        ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,ox2om,o2i  & ! input
+                        )
+                endif 
                 exit 
             endif  
         endif 
@@ -1219,6 +1302,48 @@ endsubroutine getinput
 !**************************************************************************************************************************************
 
 !**************************************************************************************************************************************
+subroutine getinput_v2(ccflxi,om2cc,dti,filechr,dep,oxonly,biotchr)
+implicit none 
+integer(kind=4) narg,ia
+character*25 arg
+real(kind=8),intent(out)::ccflxi,om2cc,dti,dep
+logical,intent(out)::oxonly
+character*255,intent(out):: filechr,biotchr
+
+narg = iargc()
+do ia = 1, narg,2
+    call getarg(ia,arg)
+    select case(trim(arg))
+        case('cc','CC','Cc')
+            call getarg(ia+1,arg)
+            read(arg,*)ccflxi   ! reading caco3 total rain flux
+        case('rr','RR','Rr')
+            call getarg(ia+1,arg)
+            read(arg,*)om2cc  ! reading om/caco3 rain ratio 
+        case('dep','DEP','Dep')
+            call getarg(ia+1,arg)
+            read(arg,*)dep  ! reading water depth in km 
+        case('dt','DT','Dt')
+            call getarg(ia+1,arg)
+            read(arg,*)dti   ! reading time step used in calculation 
+        case('fl','FL','Fl')
+            call getarg(ia+1,arg)
+            read(arg,*)filechr  ! reading file name that store sediment profiles etc. 
+        case('ox','OX','Ox')
+            call getarg(ia+1,arg)
+            read(arg,*)oxonly  ! reading file name that store sediment profiles etc.
+        case('biot','BIOT','Biot')
+            call getarg(ia+1,arg)
+            read(arg,*)biotchr  ! character to define styles of bioturbation
+    end select
+enddo
+
+! stop
+
+endsubroutine getinput_v2 
+!**************************************************************************************************************************************
+
+!**************************************************************************************************************************************
 subroutine makeprofdir(  &  ! make profile files and a directory to store them 
     workdir   &
     ,filechr,anoxic,labs,turbo2,nobio,nspcc  &
@@ -1238,24 +1363,27 @@ logical,intent(in)::anoxic
 logical,dimension(nspcc+2),intent(in)::labs,turbo2,nobio
 real(kind=8) dumreal
 integer(kind=4) ia,isp
-character*25 dumchr(3)
+character*25 dumchr(3),chr_tmp
 character*25,intent(out)::chr(3,4)
 
 do ia = 1,3  !  creating file name based on read caco3 rain flux, rain ratio and water depth 
     if (ia==1) dumreal=ccflxi  
     if (ia==2) dumreal=om2cc
     if (ia==3) dumreal=dep
-    if (dumreal/=0d0) then 
-        write(chr(ia,1),'(i0)') floor(log10(dumreal))  !! reading order 
-        write(chr(ia,2),'(i0)') int(dumreal/(10d0**(floor(log10(dumreal))))) !  first digit 
-        write(chr(ia,3),'(i0)') int((dumreal/(10d0**(floor(log10(dumreal)))) &         
-            - int(dumreal/(10d0**(floor(log10(dumreal))))))*10d0)   ! second digit 
-    else   ! if value is 0 set every character 0 
-        write(chr(ia,1),'(i0)') 0 
-        write(chr(ia,2),'(i0)') 0
-        write(chr(ia,3),'(i0)') 0
-    endif
-    chr(ia,4) = trim(adjustl(chr(ia,2)))//'_'//trim(adjustl(chr(ia,3)))//'E'//trim(adjustl(chr(ia,1)))  
+    ! if (dumreal/=0d0) then 
+        ! write(chr(ia,1),'(i0)') floor(log10(dumreal))  !! reading order 
+        ! write(chr(ia,2),'(i0)') int(dumreal/(10d0**(floor(log10(dumreal))))) !  first digit 
+        ! write(chr(ia,3),'(i0)') int((dumreal/(10d0**(floor(log10(dumreal)))) &         
+            ! - int(dumreal/(10d0**(floor(log10(dumreal))))))*10d0)   ! second digit 
+    ! else   ! if value is 0 set every character 0 
+        ! write(chr(ia,1),'(i0)') 0 
+        ! write(chr(ia,2),'(i0)') 0
+        ! write(chr(ia,3),'(i0)') 0
+    ! endif
+    write(chr_tmp,'(E7.2e1)') dumreal 
+    ! chr(ia,4) = trim(adjustl(chr(ia,2)))//'_'//trim(adjustl(chr(ia,3)))//'E'//trim(adjustl(chr(ia,1)))  
+    ! chr_tmp(2:2)='_'
+    chr(ia,4) = trim(adjustl(chr_tmp))
     ! x_yEz where x,y and z are read first and second digits and z is the order 
 enddo 
 print'(6A)','ccflx','om2cc','dep:',(chr(ia,4),ia=1,3)
