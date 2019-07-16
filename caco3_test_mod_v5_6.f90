@@ -269,7 +269,8 @@ if (oxonly) anoxic = .false.
 
 flg_500 = .false.
 
-dt = dti2
+! dt = dti2
+dti = dti2
 dep = depi2
 
 call date_and_time(dumchr(1),dumchr(2),dumchr(3),dumint)  ! get date and time in character 
@@ -497,10 +498,6 @@ do
     call bdcnd(   &
         time,dep,time_spn,time_trs,time_aft,depi,depf  &
         ) 
-#else 
-    dt = dti
-    600 continue 
-#endif 
 
     ! isotope signals represented by caco3 rain fluxes 
     d18o_flx = sum(d18o_sp(:)*ccflx(:))/ccflxi
@@ -515,6 +512,11 @@ do
     endif 
 #endif 
 #endif
+
+#else 
+    dt = dti
+    600 continue 
+#endif 
 
     !! === temperature & pressure and associated boundary changes ====
     ! if temperature is changed during signal change event this affect diffusion coeff etc. 
@@ -659,7 +661,7 @@ do
                         o2x  & ! output
                         ,iizox,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
                         )
-                else 
+                elseif (izox==nz) then  
                     call o2calc_ox(  &
                         o2x  & ! output
                         ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
@@ -691,7 +693,7 @@ do
                     o2dec,o2dif,o2tflx,o2res  & ! output 
                     ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,iizox_errmin,ox2om,o2i  & ! input
                     )
-            else 
+            elseif (iizox_errmin ==nz) then 
                 call o2calc_ox(  &
                     o2x  & ! output
                     ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
@@ -781,7 +783,7 @@ do
                         o2dec,o2dif,o2tflx,o2res  & ! output 
                         ,nz,sporo,kom_ox,omx,dz,poro,dif_o2,dt_om_o2,o2,o2x,izox,ox2om,o2i  & ! input
                         )       
-                else 
+                elseif (izox == nz) then  
                     call o2calc_ox(  &
                         o2x  & ! output
                         ,nz,poro,o2,kom_ox,omx,sporo,dif_o2,dz,dt_om_o2,ox2om,o2i & ! input
@@ -1658,7 +1660,7 @@ enddo
 #ifdef sense
 time_trs = 0d0   !  there is no event needed 
 time_aft = 0d0 
-! time_spn = 2d0*time_spn  ! first run without dissolution 
+! time_spn = 10d0*time_spn  ! longer
 do itrec=1,nrec
     rectime(itrec)=itrec*time_spn/real(nrec)
 enddo
