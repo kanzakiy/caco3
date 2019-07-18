@@ -470,7 +470,7 @@ def coefs(cai,temp,nz,nspcc,poro,komi,kcci,size,sal,dep):
     kom[:] = komi  # assume reference values for all reaction terms 
     kcc[:,:] = kcci
     if size:
-        kcc[:,0:5]=kcci*10.
+        kcc[:,0:4]=kcci*10.
     # keq1 = calceq1(temp,sal,dep)
     # keq2 = calceq2(temp,sal,dep)
     keqcc = calceqcc(temp,sal,dep)
@@ -1326,12 +1326,12 @@ def calccaco3sys(  #
             print 'stop'
         if showiter:
             print 'co2 iteration',itr,error
-            print  'cc :',np.sum(ccx[0:nz:nz/5,:],axis=1)*mcc/rho[0:nz:nz/5]*100e0
+            print  'cc :',np.sum(ccx[0:nz:nz/5,:]*mcc[:],axis=1)/rho[0:nz:nz/5]*100e0
             print  'dic:',dicx[0:nz:nz/5]#*1e3
             print  'alk:',alkx[0:nz:nz/5]#*1e3
             print  '   ..... multiple cc species ..... '
             for isp in range(nspcc ):
-                print '{:03}'.format(isp+1),ccx[0:nz:nz/5,isp]*mcc/rho[0:nz:nz/5]*100e0
+                print '{:03}'.format(isp+1),ccx[0:nz:nz/5,isp]*mcc[isp]/rho[0:nz:nz/5]*100e0
         if (ccx<0e0).any():
             print 'negative ccx, stop'
             print ccx
@@ -1453,13 +1453,13 @@ def calcflxcaco3sys(
             if labs[isp+2] or  turbo2[isp+2]: 
                 for iiz in range(nz):
                     if trans[iiz,iz,isp+2]==0e0: continue
-                    dw[iz] = dw[iz] - mvcc*(-trans[iiz,iz,isp+2]/dz[iz]*dz[iiz]*(1e0-poro[iiz])*ccx[iiz,isp])
+                    dw[iz] = dw[iz] - mvcc[isp]*(-trans[iiz,iz,isp+2]/dz[iz]*dz[iiz]*(1e0-poro[iiz])*ccx[iiz,isp])
             else :
                 if nonlocal[isp+2]:
                     for iiz in range( nz):
                         if trans[iiz,iz,isp+2]==0e0: continue
-                        dw[iz] = dw[iz] -mvcc*(-trans[iiz,iz,isp+2]/dz[iz]*ccx[iiz,isp])
-        dw[iz] = dw[iz] -(1e0-poro[iz])*mvcc*np.sum(rcc[iz,:])
+                        dw[iz] = dw[iz] -mvcc[isp]*(-trans[iiz,iz,isp+2]/dz[iz]*ccx[iiz,isp])
+        dw[iz] = dw[iz] -(1e0-poro[iz])*mvcc[isp]*np.sum(rcc[iz,:])
     # residual fluxes 
     ccres[:] = cctflx[:] +  ccdis[:] +  ccdif[:] + ccadv[:] + ccrain[:]
     dicres = dictflx + dicdis + dicdif + dicdec 
@@ -1709,7 +1709,7 @@ def recordprofile(itrec
         file_tmp.close()
         file_tmp=open(workdir+'ccx-'+'{:03}'.format(0)+'.txt','w')
         for iz in range(nz):
-            print >> file_tmp,z[iz],age[iz],np.sum(cc[iz,:])*mcc/2.5*100.,dic[iz]*1e3\
+            print >> file_tmp,z[iz],age[iz],np.sum(cc[iz,:]*mcc[:])/2.5*100.,dic[iz]*1e3\
                   ,alk[iz]*1e3,co3[iz]*1e3-co3sat,np.sum(rcc[iz,:]),-np.log10(pro[iz])
         file_tmp.close()
         file_tmp=open(workdir+'o2x-'+'{:03}'.format(0)+'.txt','w')
@@ -1723,7 +1723,7 @@ def recordprofile(itrec
         file_tmp=open(workdir+'ccx_sp-'+'{:03}'.format(0)+'.txt','w')
         for iz in range(nz):
             # print >> file_tmp,z[iz],age[iz],ccx[iz,:]*mcc/2.5*100.
-            print >> file_tmp,z[iz],age[iz],str(ccx[iz,:]*mcc/2.5*100.)[1:-1]
+            print >> file_tmp,z[iz],age[iz],str(ccx[iz,:]*mcc[:]/2.5*100.)[1:-1]
         file_tmp.close()
         file_tmp=open(workdir+'sig-'+'{:03}'.format(0)+'.txt','w')
         for iz in range(nz):
@@ -1740,7 +1740,7 @@ def recordprofile(itrec
         file_tmp.close()
         file_tmp = open(workdir+'ccx-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
-            print>>file_tmp, z[iz],age[iz],np.sum(ccx[iz,:])*mcc/rho[iz]*100e0, dicx[iz]*1e3, alkx[iz]*1e3  \
+            print>>file_tmp, z[iz],age[iz],np.sum(ccx[iz,:]*mcc[:])/rho[iz]*100e0, dicx[iz]*1e3, alkx[iz]*1e3  \
                 , co3x[iz]*1e3-co3sat, np.sum(rcc[iz,:]),-np.log10(prox[iz]) 
         file_tmp.close()
         file_tmp = open(workdir+'omx-'+ '{:03}'.format(itrec)+'.txt','w') 
@@ -1754,7 +1754,7 @@ def recordprofile(itrec
         file_tmp = open(workdir+'ccx_sp-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
             # print>>file_tmp,z[iz],age[iz],ccx[iz,0:nspcc]*mcc/rho[iz]*100e0
-            print>>file_tmp,z[iz],age[iz], str(ccx[iz,0:nspcc]*mcc/rho[iz]*100.)[1:-1]
+            print>>file_tmp,z[iz],age[iz], str(ccx[iz,0:nspcc]*mcc[0:nspcc]/rho[iz]*100.)[1:-1]
         file_tmp.close()
         file_tmp = open(workdir+'sig-'+ '{:03}'.format(itrec)+'.txt','w') 
         for iz in range(nz):
@@ -1896,7 +1896,7 @@ def signal_flx(time,time_spn,time_trs,time_aft
         if size:
             for isp in range(nspcc):
                 if isp<=3:ccflx[isp]=flxfrc2[isp]*ccflxi*(1.-flxfin)
-                else:ccflx[isp]=flxfrc2[isp-3]*ccflxi*flxfin
+                else:ccflx[isp]=flxfrc2[isp-4]*ccflxi*flxfin
     elif time>time_spn+time_trs:
         d13c_ocn = d13c_ocni # now again initial values 
         d18o_ocn = d18o_ocni
@@ -1984,6 +1984,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     biotest = False                 # 5kyr signal tracking
     size = False                    # two sizes of caco3 species
     track2 = False                  # signal tracking by method 2
+    isotrack = False                # direct isotopologue tracking
     showiter = showiter             # show each iteration 
     sparse = sparse                 # use sparse matrix solver for co2 system
     # switches for mixing 
@@ -2008,6 +2009,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     elif runmode== 'biotest': biotest = True
     elif runmode == 'size': size = True
     elif runmode == 'track2': track2 = True       
+    elif runmode == 'isotrack': isotrack = True
     # ===========  checking something 
     # chk_caco3_therm()
     # chk_caco3_therm_sbrtns()
@@ -2016,8 +2018,13 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     if sense:nspcc =np.int32(1)
     if size:nspcc = np.int32(8)
     if track2:nspcc = np.int32(42)
+    if isotrack:nspcc = np.int32(5)
     # use a shallow sediment for sensitivity analysis
     if sense:ztot = 50.
+    # assign IDs to isotopologues; reference isotope ratios  
+    if isotrack: 
+        i12c16o=1;i12c18o=2;i13c16o=3;i13c18o=4;i14c=5
+        r18o_pdb = 0.0020672 ; r17o_pdb = 0.0003859 ; r13c_pdb = 0.011180
     # mixing properties 
     nobio = np.zeros(nspcc+2,dtype=bool)
     turbo2 = np.zeros(nspcc+2,dtype=bool)
@@ -2062,16 +2069,24 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     ccflx = np.zeros((nspcc),dtype=np.float64)
     ccflx[:] = ccflxi/float(nspcc)
     # ccflx[0]=ccflxi
+    mcc = np.ones(nspcc,dtype=np.float64)*100.
+    if isotrack: 
+        mcc[i12c16o] = 40.078+12.+16.*3.
+        mcc[i12c18o] = 40.078+12.+16.*2.+18.
+        mcc[i13c16o] = 40.078+13.+16.*3.
+        mcc[i13c18o] = 40.078+13.+16.*2.+18.
+        mcc[i14c] = 40.078+14.+16.*3.
     mvom = np.float64(mom/rhoom)
     mvsed = np.float64(msed/rhosed)
-    mvcc = np.float64(mcc/rhocc)
+    mvcc = np.ones(nspcc,dtype=np.float64)
+    mvcc[:] = mcc[:]/rhocc
     sporo = np.zeros(nz,dtype=np.float64)
     poro = getporosity(z,nz)
     porof = poro[nz-1]  # this assumes zero-porosity gradient at the depth; these choices do not affect the calculation 
     sporof = 1.-porof  #  volume fraction of solids at bottom depth
     sporoi = 1.-poroi # volume fraction of solids at the seawater-sediment interface (SWI)
     sporo = 1. - poro  #  volume fraction of solids
-    wi = (detflx/msed*mvsed + np.sum(ccflx)*mvcc)/(1.-poroi)
+    wi = (detflx/msed*mvsed + np.sum(ccflx[:]*mvcc[:]))/(1.-poroi)
     # here reference point of iteration
     w = np.zeros(nz,dtype=np.float64)
     wx = np.zeros(nz,dtype=np.float64)
@@ -2389,7 +2404,9 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
                         break
                 itr = itr + 1
             #~~  O2 calculation END ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            if flg_restart:continue 
+            if flg_restart:
+                flg_timereset = True
+                continue 
 #            for iz in range(nz):
 #                if o2x[iz] > o2th:
 #                    oxco2[iz] = (1e0-poro[iz])*kom[iz]*omx[iz]  # aerobic respiration 
@@ -2424,7 +2441,9 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
             # update aqueous co2 species 
             # calcspecies(temp,sal,dep,dicx,alkx,co2x,hco3x,co3x,prox,info)
             # if flg_restart: break # exit loop for w iteration  
-            if flg_restart: continue # exit loop for w iteration  
+            if flg_restart: 
+                flg_timereset = True
+                continue # exit loop for w iteration  
             # calcspecies(temp,sal,dep,dicx,alkx)
             if co2chem=='co2':co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcspecies(temp,sal,dep,dicx,alkx,nz)
             elif co2chem=='co2h2o':co2x,hco3x,co3x,prox,dco3_ddic,dco3_dalk,info = calcco2h2o(temp,sal,dep,dicx,alkx,nz)
@@ -2481,12 +2500,12 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
             ## ~~~~~~~~~End of clay calculation 
 #            err_fx = np.max(np.abs(frt[:] - 1e0))  # recording previous error in total vol. fraction of solids 
             for iz in range(nz ):
-                rho[iz] = omx[iz]*mom + ptx[iz]*msed +  np.sum(ccx[iz,:])*mcc  # calculating bulk density 
-                frt[iz] = omx[iz]*mvom + ptx[iz]*mvsed + np.sum(ccx[iz,:])*mvcc  # calculation of total vol. fraction of solids 
+                rho[iz] = omx[iz]*mom + ptx[iz]*msed +  np.sum(ccx[iz,:]*mcc[:])  # calculating bulk density 
+                frt[iz] = omx[iz]*mvom + ptx[iz]*mvsed + np.sum(ccx[iz,:]*mvcc[:])  # calculation of total vol. fraction of solids 
             err_f = np.max(np.abs(frt[:] - 1e0))  # new error in total vol. fraction (must be 1 in theory) 
 #            if err_f < err_fx: err_f_min = err_f  # recording minimum error 
             wx[:]=w[:]
-            wi = (detflx/msed*mvsed + np.sum(ccflx[:])*mvcc +omflx*mvom)/(1e0-poroi)  # upper value; (1e0-poroi) is almost meaningless, see below 
+            wi = (detflx/msed*mvsed + np.sum(ccflx[:]*mvcc[:]) +omflx*mvom)/(1e0-poroi)  # upper value; (1e0-poroi) is almost meaningless, see below 
             for iz in range(nz):
                 if iz==0: 
                     w[iz]=((1e0-poroi)*wi + dw[iz]*dz[iz])/(1e0-poro[iz])
@@ -2551,14 +2570,14 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
         print  'z  :',z[0:nz:nz/5]
         print  'om :',omx[0:nz:nz/5]*mom/rho[0:nz:nz/5]*100e0
         print  'o2 :',o2x[0:nz:nz/5]#*1e3
-        print  'cc :',np.sum(ccx[0:nz:nz/5,:],axis=1)*mcc/rho[0:nz:nz/5]*100e0
+        print  'cc :',np.sum(ccx[0:nz:nz/5,:]*mcc[:],axis=1)/rho[0:nz:nz/5]*100e0
         print  'dic:',dicx[0:nz:nz/5]#*1e3
         print  'alk:',alkx[0:nz:nz/5]#*1e3
         print  'ph :',-np.log10(prox[0:nz:nz/5])
         print  'sed:',ptx[0:nz:nz/5]*msed/rho[0:nz:nz/5]*100e0
         print  '   ..... multiple cc species ..... '
         for isp in range(nspcc ):
-            print '{:03}'.format(isp+1),ccx[0:nz:nz/5,isp]*mcc/rho[0:nz:nz/5]*100e0
+            print '{:03}'.format(isp+1),ccx[0:nz:nz/5,isp]*mcc[isp]/rho[0:nz:nz/5]*100e0
         print  '++++ flx ++++'
         print  'flx:',np.array(['tflx   ','adv    ','dif    ','omrxn  ','ccrxn  ','rain   ','res    '])
         print  'om :',np.array([ omtflx, omadv,  omdif, omdec,0e0,omrain, omres])
@@ -2586,25 +2605,25 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
         if size :
             if all(w>=0e0):  # not recording when burial is negative 
                 print>>file_sigmly,time-age[izrec],d13c_blk[izrec],d18o_blk[izrec] \
-                    ,np.sum(ccx[izrec,:])*mcc/rho[izrec]*100e0,ptx[izrec]*msed/rho[izrec]*100e0
+                    ,np.sum(ccx[izrec,:]*mcc[:])/rho[izrec]*100e0,ptx[izrec]*msed/rho[izrec]*100e0
                 print>>file_sigmlyd, time-age[izrec2],d13c_blk[izrec2],d18o_blk[izrec2] \
-                    ,np.sum(ccx[izrec2,:])*mcc/rho[izrec2]*100e0,ptx[izrec2]*msed/rho[izrec2]*100e0
+                    ,np.sum(ccx[izrec2,:]*mcc[:])/rho[izrec2]*100e0,ptx[izrec2]*msed/rho[izrec2]*100e0
                 print>>file_sigbtm,  time-age[nz-1],d13c_blk[nz-1],d18o_blk[nz-1] \
-                    ,np.sum(ccx[nz-1,:])*mcc/rho[nz-1]*100e0,ptx[nz-1]*msed/rho[nz-1]*100e0
+                    ,np.sum(ccx[nz-1,:]*mcc[:])/rho[nz-1]*100e0,ptx[nz-1]*msed/rho[nz-1]*100e0
         else :
             if all(w>=0e0): # not recording when burial is negative 
                 print>>file_sigmly, time-age[izrec],d13c_blk[izrec],d18o_blk[izrec] \
-                    ,np.sum(ccx[izrec,:])*mcc/rho[izrec]*100e0,ptx[izrec]*msed/rho[izrec]*100e0  \
-                    ,d13c_blkf[izrec],d18o_blkf[izrec],np.sum(ccx[izrec,0:4])*mcc/rho[izrec]*100e0  \
-                    ,d13c_blkc[izrec],d18o_blkc[izrec],np.sum(ccx[izrec,4:8])*mcc/rho[izrec]*100e0  
+                    ,np.sum(ccx[izrec,:]*mcc[:])/rho[izrec]*100e0,ptx[izrec]*msed/rho[izrec]*100e0  \
+                    ,d13c_blkf[izrec],d18o_blkf[izrec],np.sum(ccx[izrec,0:4]*mcc[0:4])/rho[izrec]*100e0  \
+                    ,d13c_blkc[izrec],d18o_blkc[izrec],np.sum(ccx[izrec,4:8]*mcc[4:8])/rho[izrec]*100e0  
                 print>>file_sigmlyd, time-age[izrec2],d13c_blk[izrec2],d18o_blk[izrec2] \
-                    ,np.sum(ccx[izrec2,:])*mcc/rho[izrec2]*100e0,ptx[izrec2]*msed/rho[izrec2]*100e0  \
-                    ,d13c_blkf[izrec2],d18o_blkf[izrec2],np.sum(ccx[izrec2,0:4])*mcc/rho[izrec2]*100e0  \
-                    ,d13c_blkc[izrec2],d18o_blkc[izrec2],np.sum(ccx[izrec2,4:8])*mcc/rho[izrec2]*100e0  
+                    ,np.sum(ccx[izrec2,:]*mcc[:])/rho[izrec2]*100e0,ptx[izrec2]*msed/rho[izrec2]*100e0  \
+                    ,d13c_blkf[izrec2],d18o_blkf[izrec2],np.sum(ccx[izrec2,0:4]*mcc[0:4])/rho[izrec2]*100e0  \
+                    ,d13c_blkc[izrec2],d18o_blkc[izrec2],np.sum(ccx[izrec2,4:8]*mcc[4:8])/rho[izrec2]*100e0  
                 print>>file_sigbtm, time-age[nz-1],d13c_blk[nz-1],d18o_blk[nz-1] \
-                    ,np.sum(ccx[nz-1,:])*mcc/rho[nz-1]*100e0,ptx[nz-1]*msed/rho[nz-1]*100e0 \
-                    ,d13c_blkf[nz-1],d18o_blkf[nz-1],np.sum(ccx[nz-1,0:4])*mcc/rho[nz-1]*100e0  \
-                    ,d13c_blkc[nz-1],d18o_blkc[nz-1],np.sum(ccx[nz-1,4:8])*mcc/rho[nz-1]*100e0  
+                    ,np.sum(ccx[nz-1,:]*mcc[:])/rho[nz-1]*100e0,ptx[nz-1]*msed/rho[nz-1]*100e0 \
+                    ,d13c_blkf[nz-1],d18o_blkf[nz-1],np.sum(ccx[nz-1,0:4]*mcc[0:4])/rho[nz-1]*100e0  \
+                    ,d13c_blkc[nz-1],d18o_blkc[nz-1],np.sum(ccx[nz-1,4:8]*mcc[4:8])/rho[nz-1]*100e0  
         # before going to next time step, update variables 
         time = time + dt
         it = it + 1
@@ -2614,6 +2633,12 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
         dic[:] = dicx[:].copy()
         alk[:] = alkx[:].copy()
         pt[:] = ptx[:].copy()
+        if flg_timereset:
+            if not sense and time<time_spn: 
+                time = 0.
+                it = 1
+                print '... because of flg_restart, time is forced back to the beginning ...'
+            flg_timereset = False
         
     file_tmp=open(workdir+'sp-trace.txt','w') 
     for isp  in range(nspcc):
@@ -2647,8 +2672,8 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     file_tmp=open(workdir+'lys_sense_'
         +'cc-'+'{:.1e}'.format(ccflxi)+'_rr-'+'{:.1e}'.format(om2cc)  
         +'.txt','a') 
-    print>>file_tmp,1e6*(co3i*1e3-co3sat), np.sum(ccx[0,:])*mcc/rho[0]*100e0, frt[0]  \
-        ,np.sum(ccx[nz-1,:])*mcc/rho[nz-1]*100e0, frt[nz-1],np.sum(ccx[izml,:])*mcc/rho[izml]*100e0, frt[izml]
+    print>>file_tmp,1e6*(co3i*1e3-co3sat), np.sum(ccx[0,:]*mcc[:])/rho[0]*100e0, frt[0]  \
+        ,np.sum(ccx[nz-1,:]*mcc[:])/rho[nz-1]*100e0, frt[nz-1],np.sum(ccx[izml,:]*mcc[:])/rho[izml]*100e0, frt[izml]
     file_tmp.close()
     file_tmp=open(workdir+'ccbur_sense_' 
         +'cc-'+'{:.1e}'.format(ccflxi)+'_rr-'+'{:.1e}'.format(om2cc)  
