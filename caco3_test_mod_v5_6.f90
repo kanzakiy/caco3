@@ -1392,7 +1392,7 @@ print'(6A)','ccflx','om2cc','dep:',(chr(ia,4),ia=1,3)
 ! pause
 !! FILES !!!!!!!!!
 workdir = 'C:/Users/YK/Desktop/Sed_res/'
-workdir = trim(adjustl(workdir))//'test-translabs/profiles/'
+workdir = trim(adjustl(workdir))//'caco3_output/profiles/'
 workdir = trim(adjustl(workdir))//'multi/'
 #ifdef test 
 workdir = trim(adjustl(workdir))//'test/'
@@ -4288,7 +4288,7 @@ real(kind=8),intent(in)::dt,time
 integer(kind=4),intent(in)::it
 
 workdir = 'C:/Users/YK/Desktop/Sed_res/'
-workdir = trim(adjustl(workdir))//'test-translabs/res/'
+workdir = trim(adjustl(workdir))//'caco3_output/res/'
 workdir = trim(adjustl(workdir))//'multi/'
 #ifdef test 
 workdir = trim(adjustl(workdir))//'test/'
