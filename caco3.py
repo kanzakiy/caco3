@@ -1994,7 +1994,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     # switches for co2 chemistry 
     co2chem = co2chem               # dic = co2+hco3+co3; alk = hco3+2*co3
     # working directory 
-    workdir = 'C:/Users/YK/Desktop/Sed_res'
+    homedir = 'C:/Users/YK/Desktop/Sed_res'
     # file nane 
     if len(fl)==0:filename = '-no_name_specified' 
     else: filename = '-'+fl
@@ -2033,7 +2033,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     if alllabs: labs[:] = True
     if allnobio: nobio[:] = True
     #  preparing directory to store results 
-    workdir += '/test-translabs/profiles/python/multi/'
+    workdir = homedir+'/output/profiles/python/multi/'
     if not anoxic: workdir += 'ox'
     else: workdir += 'oxanox'
     if any(labs): workdir += '_labs'
@@ -2656,8 +2656,7 @@ def caco3_main(ccflxi,om2cc,dep,dt,fl,biot,oxonly,runmode,co2chem,sparse,showite
     file_sigmly.close()
     file_sigmlyd.close()
     file_sigbtm.close()
-    workdir = 'C:/Users/YK/Desktop/Sed_res/'
-    workdir += 'test-translabs/res/'
+    workdir  = homedir + '/output/res/'
     workdir += 'python/'
     workdir += 'multi/'
     if not anoxic:
